@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Картотека — карточки для языка</title>
+
+<!-- iOS: установка на домашний экран как отдельное приложение -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Картотека">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#14171A">
+
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===================== ЭКРАН: КОЛОДЫ ===================== -->
+  <section class="view" id="view-decks" data-view="decks">
+    <header class="view-header">
+      <h1 class="view-title">Картотека</h1>
+      <p class="view-sub">Твои колоды — независимые наборы карточек</p>
+    </header>
+
+    <div class="deck-list" id="deck-list"></div>
+
+    <button class="btn-tab-new" id="btn-new-deck">
+      <span class="plus">+</span> Новая колода
+    </button>
+  </section>
+
+  <!-- ===================== ЭКРАН: КАРТОЧКИ (список активной колоды) ===================== -->
+  <section class="view" id="view-cards" data-view="cards">
+    <header class="view-header">
+      <h1 class="view-title" id="cards-deck-name">Колода</h1>
+      <p class="view-sub" id="cards-count-sub">0 карточек</p>
+    </header>
+
+    <div class="card-toolbar">
+      <button class="btn-brass" id="btn-add-card">+ Добавить</button>
+      <button class="btn-brass" id="btn-import-cards">Импорт файла</button>
+      <button class="btn-ghost" id="btn-dedup">Убрать дубли</button>
+      <button class="btn-ghost btn-danger" id="btn-delete-all">Очистить колоду</button>
+    </div>
+
+    <div class="entry-list" id="entry-list"></div>
+    <input type="file" id="import-file-input" accept=".csv,.json" hidden>
+  </section>
+
+  <!-- ===================== ЭКРАН: УЧИТЬ ===================== -->
+  <section class="view" id="view-learn" data-view="learn">
+
+    <!-- под-экран: выбор направления -->
+    <div id="learn-setup" class="learn-setup">
+      <header class="view-header">
+        <h1 class="view-title">Учить</h1>
+        <p class="view-sub" id="learn-deck-info">—</p>
+      </header>
+      <p class="setup-hint">В каком направлении показывать карточки?</p>
+      <button class="btn-direction" data-dir="wt">Слово → Перевод</button>
+      <button class="btn-direction" data-dir="tw">Перевод → Слово</button>
+      <button class="btn-direction" data-dir="mix">Вперемешку 🔀</button>
+    </div>
+
+    <!-- под-экран: сама сессия -->
+    <div id="learn-session" class="learn-session" hidden>
+      <div class="session-progress" id="session-progress">осталось: 0</div>
+
+      <div class="card-stage">
+        <div class="index-card" id="flip-card">
+          <div class="card-hole"></div>
+          <div class="card-face card-front" id="card-front-text"></div>
+          <div class="card-face card-back" id="card-back-text" hidden></div>
+          <div class="card-tap-hint" id="card-tap-hint">нажми, чтобы перевернуть</div>
+        </div>
+      </div>
+
+      <div class="stamp-row" id="stamp-row" hidden>
+        <button class="stamp stamp-no" id="btn-dont-know">✗<br>НЕ ЗНАЛ</button>
+        <button class="stamp stamp-yes" id="btn-know">✓<br>ЗНАЛ</button>
+      </div>
+    </div>
+
+    <!-- под-экран: пусто / завершено -->
+    <div id="learn-empty" class="learn-empty" hidden>
+      <p id="learn-empty-text"></p>
+      <button class="btn-brass" id="btn-learn-again">Повторить ещё раз</button>
+    </div>
+  </section>
+
+  <!-- ===================== ЭКРАН: СТАТИСТИКА ===================== -->
+  <section class="view" id="view-stats" data-view="stats">
+    <header class="view-header">
+      <h1 class="view-title">Статистика</h1>
+      <p class="view-sub" id="stats-deck-name">—</p>
+    </header>
+    <div class="stat-grid" id="stat-grid"></div>
+  </section>
+
+  <!-- ===================== НИЖНЕЕ МЕНЮ ===================== -->
+  <nav class="tabbar" id="tabbar">
+    <button class="tab-btn is-active" data-target="decks">
+      <svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+      <span>Колоды</span>
+    </button>
+    <button class="tab-btn" data-target="cards">
+      <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+      <span>Карточки</span>
+    </button>
+    <button class="tab-btn" data-target="learn">
+      <svg viewBox="0 0 24 24"><path d="M4 5c3-1.5 6-1.5 8 0 2-1.5 5-1.5 8 0v13c-3-1.5-6-1.5-8 0-2-1.5-5-1.5-8 0z"/></svg>
+      <span>Учить</span>
+    </button>
+    <button class="tab-btn" data-target="stats">
+      <svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
+      <span>Статистика</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ===================== МОДАЛКИ ===================== -->
+
+<div class="modal-backdrop" id="modal-backdrop" hidden>
+
+  <div class="modal" id="modal-new-deck" hidden>
+    <h2>Новая колода</h2>
+    <p class="modal-hint">Например: «Английский-Польский»</p>
+    <input type="text" id="input-new-deck-name" placeholder="Название колоды" maxlength="60">
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-brass" id="confirm-new-deck">Создать</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-add-card" hidden>
+    <h2>Новая карточка</h2>
+    <input type="text" id="input-card-word" placeholder="Слово / фраза">
+    <input type="text" id="input-card-translation" placeholder="Перевод">
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-brass" id="confirm-add-card">Добавить</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-confirm" hidden>
+    <h2 id="confirm-title">Уверен?</h2>
+    <p class="modal-hint" id="confirm-text"></p>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-danger-solid" id="confirm-action-btn">Удалить</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="db.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
