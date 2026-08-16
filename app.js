@@ -5,12 +5,18 @@
 
 const state = {
   activeDeckId: null,
+  editingDeckId: null,   // null = создаём новую колоду, id = редактируем существующую
   learn: {
     queue: [],           // очередь id карточек в текущей сессии
     directions: {},       // id -> 'wt' | 'tw'
     sessionTotal: 0,
     current: null,        // карточка, которая сейчас показана
     revealed: false,
+  },
+  listen: {
+    speaker: null,        // экземпляр CardSpeaker
+    deck: null,
+    sessionActive: false,
   },
   pendingConfirm: null,   // функция, которая выполнится по подтверждению в модалке
 };
@@ -28,6 +34,7 @@ function showView(name) {
   if (name === 'decks') renderDecks();
   if (name === 'cards') renderCards();
   if (name === 'learn') renderLearnSetup();
+  if (name === 'listen') renderListenSetup();
   if (name === 'stats') renderStats();
 }
 
@@ -47,6 +54,7 @@ function openModal(id) {
 function closeModal() {
   $('#modal-backdrop').hidden = true;
   state.pendingConfirm = null;
+  state.editingDeckId = null;
 }
 
 function askConfirm(title, text, actionLabel, onConfirm) {
@@ -74,17 +82,24 @@ async function renderDecks() {
     const row = document.createElement('div');
     row.className = 'deck-row' + (d.id === activeId ? ' is-active' : '');
     row.style.setProperty('--deck-color', palette[i % palette.length]);
+    const wordLangLabel = (SPEECH_LANGUAGES.find((l) => l.code === d.wordLang) || {}).label || d.wordLang;
+    const trLangLabel = (SPEECH_LANGUAGES.find((l) => l.code === d.translationLang) || {}).label || d.translationLang;
     row.innerHTML = `
       <div class="deck-main">
         <div class="deck-name">${d.id === activeId ? '<span class="star">★</span>' : ''}${escapeHtml(d.name)}</div>
-        <div class="deck-count">${d.cardCount} карточек</div>
+        <div class="deck-count">${d.cardCount} карточек · ${escapeHtml(wordLangLabel)} → ${escapeHtml(trLangLabel)}</div>
       </div>
+      <button class="deck-edit" data-id="${d.id}">✏️</button>
       <button class="deck-del" data-id="${d.id}" data-name="${escapeHtml(d.name)}">🗑</button>
     `;
     row.querySelector('.deck-main').addEventListener('click', async () => {
       await setActiveDeck(d.id);
       toast(`Активная колода: «${d.name}»`);
       renderDecks();
+    });
+    row.querySelector('.deck-edit').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDeckModal(d);
     });
     row.querySelector('.deck-del').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -104,19 +119,42 @@ async function renderDecks() {
   });
 }
 
-$('#btn-new-deck').addEventListener('click', () => {
-  $('#input-new-deck-name').value = '';
+function fillLangSelect(selectEl, selectedCode) {
+  selectEl.innerHTML = SPEECH_LANGUAGES.map(
+    (l) => `<option value="${l.code}"${l.code === selectedCode ? ' selected' : ''}>${l.label}</option>`
+  ).join('');
+}
+
+function openDeckModal(deck /* undefined = создание новой */) {
+  state.editingDeckId = deck ? deck.id : null;
+  $('#deck-modal-title').textContent = deck ? 'Изменить колоду' : 'Новая колода';
+  $('#confirm-new-deck').textContent = deck ? 'Сохранить' : 'Создать';
+  $('#input-new-deck-name').value = deck ? deck.name : '';
+  fillLangSelect($('#select-word-lang'), deck ? deck.wordLang : 'pl-PL');
+  fillLangSelect($('#select-translation-lang'), deck ? deck.translationLang : 'ru-RU');
   openModal('modal-new-deck');
   setTimeout(() => $('#input-new-deck-name').focus(), 50);
-});
+}
+
+$('#btn-new-deck').addEventListener('click', () => openDeckModal(null));
 
 $('#confirm-new-deck').addEventListener('click', async () => {
   const name = $('#input-new-deck-name').value.trim();
+  const wordLang = $('#select-word-lang').value;
+  const translationLang = $('#select-translation-lang').value;
   if (!name) { toast('Название не может быть пустым'); return; }
-  const id = await createDeck(name);
-  await setActiveDeck(id);
-  closeModal();
-  toast(`Колода «${name}» создана`);
+
+  if (state.editingDeckId) {
+    await updateDeck(state.editingDeckId, { name, wordLang, translationLang });
+    closeModal();
+    toast(`Колода «${name}» обновлена`);
+  } else {
+    const id = await createDeck(name, { wordLang, translationLang });
+    await setActiveDeck(id);
+    closeModal();
+    toast(`Колода «${name}» создана`);
+  }
+  state.editingDeckId = null;
   renderDecks();
 });
 
@@ -404,6 +442,111 @@ async function answerCurrent(correct) {
 $('#btn-know').addEventListener('click', () => answerCurrent(true));
 $('#btn-dont-know').addEventListener('click', () => answerCurrent(false));
 $('#btn-learn-again').addEventListener('click', renderLearnSetup);
+
+/* ---------------------------------------------------------------------- *
+ * Слушать (озвучка карточек подряд)
+ * ---------------------------------------------------------------------- */
+
+const SPEECH_SUPPORTED = typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined';
+
+async function renderListenSetup() {
+  // если сессия уже идёт (например, вернулись на вкладку) — не сбрасываем её
+  if (state.listen.sessionActive) return;
+
+  const deckId = await ensureActiveDeck();
+  const deck = await getDeck(deckId);
+  const cards = await getCardsByDeck(deckId);
+
+  $('#listen-session').hidden = true;
+  $('#listen-empty').hidden = true;
+  $('#listen-setup').hidden = false;
+  $('#listen-deck-info').textContent = `Колода «${deck.name}» · карточек: ${cards.length}`;
+
+  if (!SPEECH_SUPPORTED) {
+    $('#listen-setup').hidden = true;
+    $('#listen-empty-text').textContent =
+      'Этот браузер не поддерживает озвучку речи (Web Speech API).\nВ Safari на iPhone это должно работать.';
+    $('#listen-empty').hidden = false;
+    return;
+  }
+
+  if (cards.length === 0) {
+    $('#listen-setup').hidden = true;
+    $('#listen-empty-text').textContent =
+      `В колоде «${deck.name}» пока нет карточек.\nДобавь их на вкладке «Карточки».`;
+    $('#listen-empty').hidden = false;
+  }
+}
+
+$('#btn-start-listen').addEventListener('click', async () => {
+  const deckId = await ensureActiveDeck();
+  const deck = await getDeck(deckId);
+  const cards = await getCardsByDeck(deckId);
+  if (cards.length === 0) return;
+
+  const shuffle = $('#listen-shuffle').checked;
+  const repeat = $('#listen-repeat').checked;
+
+  const speaker = new CardSpeaker();
+  speaker.onCardStart = (pos, card) => {
+    $('#listen-progress').textContent = `${pos + 1} / ${speaker.total}`;
+    $('#listen-word-text').textContent = card.word;
+    $('#listen-translation-text').textContent = card.translation;
+  };
+  speaker.onFinished = () => {
+    state.listen.sessionActive = false;
+    $('#listen-session').hidden = true;
+    $('#listen-empty-text').textContent = `Прослушано карточек: ${speaker.total} 🔊`;
+    $('#listen-empty').hidden = false;
+  };
+
+  state.listen.speaker = speaker;
+  state.listen.deck = deck;
+  state.listen.sessionActive = true;
+
+  speaker.load(cards, { shuffle, repeat });
+
+  $('#listen-setup').hidden = true;
+  $('#listen-empty').hidden = true;
+  $('#listen-session').hidden = false;
+  $('#btn-listen-playpause').textContent = '⏸';
+
+  speaker.play(deck.wordLang, deck.translationLang);
+});
+
+$('#btn-listen-playpause').addEventListener('click', () => {
+  const speaker = state.listen.speaker;
+  const deck = state.listen.deck;
+  if (!speaker) return;
+  if (speaker.isPlaying) {
+    speaker.pause();
+    $('#btn-listen-playpause').textContent = '▶';
+  } else {
+    speaker.play(deck.wordLang, deck.translationLang);
+    $('#btn-listen-playpause').textContent = '⏸';
+  }
+});
+
+$('#btn-listen-next').addEventListener('click', () => {
+  const speaker = state.listen.speaker;
+  const deck = state.listen.deck;
+  if (!speaker) return;
+  speaker.next(deck.wordLang, deck.translationLang);
+});
+
+$('#btn-listen-prev').addEventListener('click', () => {
+  const speaker = state.listen.speaker;
+  const deck = state.listen.deck;
+  if (!speaker) return;
+  speaker.prev(deck.wordLang, deck.translationLang);
+});
+
+$('#btn-listen-stop').addEventListener('click', () => {
+  const speaker = state.listen.speaker;
+  if (speaker) speaker.pause();
+  state.listen.sessionActive = false;
+  renderListenSetup();
+});
 
 /* ---------------------------------------------------------------------- *
  * Статистика

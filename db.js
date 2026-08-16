@@ -57,7 +57,7 @@ async function getAllDecks() {
   const decks = await reqToPromise(t.objectStore('decks').getAll());
   decks.sort((a, b) => a.id - b.id);
   const withCounts = await Promise.all(
-    decks.map(async (d) => ({ ...d, cardCount: await countCardsInDeck(d.id) }))
+    decks.map(async (d) => ({ ...withLangDefaults(d), cardCount: await countCardsInDeck(d.id) }))
   );
   return withCounts;
 }
@@ -69,15 +69,41 @@ async function countCardsInDeck(deckId) {
   return all.length;
 }
 
-async function getDeck(id) {
-  const t = await tx('decks', 'readonly');
-  return reqToPromise(t.objectStore('decks').get(id));
+function withLangDefaults(deck) {
+  if (!deck) return deck;
+  return {
+    ...deck,
+    wordLang: deck.wordLang || 'pl-PL',
+    translationLang: deck.translationLang || 'ru-RU',
+  };
 }
 
-async function createDeck(name) {
+async function getDeck(id) {
+  const t = await tx('decks', 'readonly');
+  const deck = await reqToPromise(t.objectStore('decks').get(id));
+  return withLangDefaults(deck);
+}
+
+async function createDeck(name, opts = {}) {
   const t = await tx('decks', 'readwrite');
-  const id = await reqToPromise(t.objectStore('decks').add({ name: name.trim().slice(0, 60), createdAt: now() }));
+  const id = await reqToPromise(t.objectStore('decks').add({
+    name: name.trim().slice(0, 60),
+    wordLang: opts.wordLang || 'pl-PL',
+    translationLang: opts.translationLang || 'ru-RU',
+    createdAt: now(),
+  }));
   return id;
+}
+
+async function updateDeck(id, fields) {
+  const t = await tx('decks', 'readwrite');
+  const store = t.objectStore('decks');
+  const deck = await reqToPromise(store.get(id));
+  if (!deck) return false;
+  Object.assign(deck, fields);
+  store.put(deck);
+  await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+  return true;
 }
 
 async function deleteDeck(deckId) {

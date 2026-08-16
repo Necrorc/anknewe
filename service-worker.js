@@ -5,13 +5,14 @@
  * хранятся отдельно, в IndexedDB — сервис-воркер их не касается.
  */
 
-const CACHE_NAME = 'flashcards-pwa-v1';
+const CACHE_NAME = 'flashcards-pwa-v2';
 
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './db.js',
+  './speech.js',
   './app.js',
   './manifest.webmanifest',
   './icons/icon-192.png',

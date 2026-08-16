@@ -93,6 +93,55 @@
     </div>
   </section>
 
+  <!-- ===================== ЭКРАН: СЛУШАТЬ ===================== -->
+  <section class="view" id="view-listen" data-view="listen">
+
+    <div id="listen-setup" class="learn-setup">
+      <header class="view-header">
+        <h1 class="view-title">Слушать</h1>
+        <p class="view-sub" id="listen-deck-info">—</p>
+      </header>
+      <p class="setup-hint">Бот вслух прочитает все карточки колоды подряд — слово, потом перевод.</p>
+
+      <div class="listen-toggles">
+        <label class="toggle-row">
+          <input type="checkbox" id="listen-shuffle">
+          <span>Случайный порядок</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="listen-repeat">
+          <span>Повторять по кругу</span>
+        </label>
+      </div>
+
+      <button class="btn-brass btn-wide" id="btn-start-listen">▶ Начать</button>
+    </div>
+
+    <div id="listen-session" class="listen-session" hidden>
+      <div class="session-progress" id="listen-progress">1 / 1</div>
+
+      <div class="card-stage">
+        <div class="index-card index-card--static">
+          <div class="card-hole"></div>
+          <div class="listen-word" id="listen-word-text"></div>
+          <div class="listen-divider"></div>
+          <div class="listen-translation" id="listen-translation-text"></div>
+        </div>
+      </div>
+
+      <div class="listen-controls">
+        <button class="listen-btn" id="btn-listen-prev" aria-label="Предыдущая">⏮</button>
+        <button class="listen-btn listen-btn--big" id="btn-listen-playpause" aria-label="Пауза">⏸</button>
+        <button class="listen-btn" id="btn-listen-next" aria-label="Следующая">⏭</button>
+      </div>
+      <button class="btn-ghost btn-wide" id="btn-listen-stop">Закончить</button>
+    </div>
+
+    <div id="listen-empty" class="learn-empty" hidden>
+      <p id="listen-empty-text"></p>
+    </div>
+  </section>
+
   <!-- ===================== ЭКРАН: СТАТИСТИКА ===================== -->
   <section class="view" id="view-stats" data-view="stats">
     <header class="view-header">
@@ -116,6 +165,10 @@
       <svg viewBox="0 0 24 24"><path d="M4 5c3-1.5 6-1.5 8 0 2-1.5 5-1.5 8 0v13c-3-1.5-6-1.5-8 0-2-1.5-5-1.5-8 0z"/></svg>
       <span>Учить</span>
     </button>
+    <button class="tab-btn" data-target="listen">
+      <svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 5V5L8 10H4z" fill="currentColor" stroke="none"/><path d="M16 9a4 4 0 010 6M18.5 6.5a8 8 0 010 11" fill="none"/></svg>
+      <span>Слушать</span>
+    </button>
     <button class="tab-btn" data-target="stats">
       <svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
       <span>Статистика</span>
@@ -128,9 +181,16 @@
 <div class="modal-backdrop" id="modal-backdrop" hidden>
 
   <div class="modal" id="modal-new-deck" hidden>
-    <h2>Новая колода</h2>
-    <p class="modal-hint">Например: «Английский-Польский»</p>
+    <h2 id="deck-modal-title">Новая колода</h2>
+    <p class="modal-hint">Например: «Английский-Польский». Языки нужны, чтобы озвучка в «Слушать» читала правильным голосом.</p>
     <input type="text" id="input-new-deck-name" placeholder="Название колоды" maxlength="60">
+
+    <label class="select-label">Язык слов (карточек)</label>
+    <select id="select-word-lang" class="modal-select"></select>
+
+    <label class="select-label">Язык перевода</label>
+    <select id="select-translation-lang" class="modal-select"></select>
+
     <div class="modal-actions">
       <button class="btn-ghost" data-close>Отмена</button>
       <button class="btn-brass" id="confirm-new-deck">Создать</button>
@@ -161,6 +221,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="db.js"></script>
+<script src="speech.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
