@@ -366,6 +366,7 @@ async function renderLearnSetup() {
 
 async function startLearnSession(mode) {
   const deckId = await ensureActiveDeck();
+  const deck = await getDeck(deckId);
   const due = await getDueCards(deckId, 20);
   if (due.length === 0) { renderLearnSetup(); return; }
 
@@ -375,6 +376,7 @@ async function startLearnSession(mode) {
     directions[id] = mode === 'mix' ? (Math.random() < 0.5 ? 'wt' : 'tw') : mode;
   }
 
+  state.learn.deck = deck;
   state.learn.queue = ids;
   state.learn.directions = directions;
   state.learn.sessionTotal = ids.length;
@@ -382,6 +384,7 @@ async function startLearnSession(mode) {
   $('#learn-setup').hidden = true;
   $('#learn-empty').hidden = true;
   $('#learn-session').hidden = false;
+  $('#card-speak-btn').hidden = !SPEECH_SUPPORTED;
 
   await showNextCard();
 }
@@ -401,10 +404,15 @@ async function showNextCard() {
   if (!card) { queue.shift(); return showNextCard(); }
 
   const direction = state.learn.directions[cardId] || 'wt';
+  const deck = state.learn.deck || {};
+  const wordLang = deck.wordLang || 'pl-PL';
+  const translationLang = deck.translationLang || 'ru-RU';
   const front = direction === 'tw' ? card.translation : card.word;
   const back = direction === 'tw' ? card.word : card.translation;
+  const frontLang = direction === 'tw' ? translationLang : wordLang;
+  const backLang = direction === 'tw' ? wordLang : translationLang;
 
-  state.learn.current = { id: cardId, front, back };
+  state.learn.current = { id: cardId, front, back, frontLang, backLang };
   state.learn.revealed = false;
 
   $('#session-progress').textContent = `осталось выучить: ${new Set(queue).size}`;
@@ -423,6 +431,15 @@ $('#flip-card').addEventListener('click', () => {
   $('#card-back-text').hidden = false;
   $('#card-tap-hint').hidden = true;
   $('#stamp-row').hidden = false;
+});
+
+$('#card-speak-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const cur = state.learn.current;
+  if (!cur || !SPEECH_SUPPORTED) return;
+  const text = state.learn.revealed ? cur.back : cur.front;
+  const lang = state.learn.revealed ? cur.backLang : cur.frontLang;
+  speakOnce(text, lang);
 });
 
 async function answerCurrent(correct) {
@@ -448,6 +465,15 @@ $('#btn-learn-again').addEventListener('click', renderLearnSetup);
  * ---------------------------------------------------------------------- */
 
 const SPEECH_SUPPORTED = typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined';
+
+/** Разово озвучивает один кусок текста (используется кнопкой 🔊 на карточке в «Учить»). */
+function speakOnce(text, lang) {
+  if (!SPEECH_SUPPORTED || !text) return;
+  speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = lang;
+  speechSynthesis.speak(utter);
+}
 
 async function renderListenSetup() {
   // если сессия уже идёт (например, вернулись на вкладку) — не сбрасываем её

@@ -280,6 +280,25 @@ button { font-family: inherit; cursor: pointer; border: none; }
   box-shadow: inset 0 1px 3px #00000066;
 }
 
+.card-speak-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--brass);
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 3px #00000055;
+}
+.card-speak-btn:active { transform: scale(.9); background: var(--bg-raised); }
+.card-speak-btn.is-speaking { color: var(--stamp-green); }
+.card-speak-btn[hidden] { display: none; }
+
 .card-face {
   text-align: center;
   font-size: 22px;
