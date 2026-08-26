@@ -460,6 +460,27 @@ $('#btn-know').addEventListener('click', () => answerCurrent(true));
 $('#btn-dont-know').addEventListener('click', () => answerCurrent(false));
 $('#btn-learn-again').addEventListener('click', renderLearnSetup);
 
+$('#card-delete-btn').addEventListener('click', () => {
+  const cur = state.learn.current;
+  if (!cur) return;
+  askConfirm(
+    'Удалить карточку?',
+    `«${cur.front}» → «${cur.back}» будет удалена из колоды безвозвратно.`,
+    'Удалить',
+    async () => {
+      await deleteCard(cur.id);
+
+      const { queue } = state.learn;
+      if (queue[0] === cur.id) queue.shift();
+      // удалённая карточка никогда не будет "выучена" — не учитываем её в итоговом счёте сессии
+      if (state.learn.sessionTotal > 0) state.learn.sessionTotal -= 1;
+
+      toast('Карточка удалена');
+      await showNextCard();
+    }
+  );
+});
+
 /* ---------------------------------------------------------------------- *
  * Слушать (озвучка карточек подряд)
  * ---------------------------------------------------------------------- */

@@ -69,7 +69,10 @@
 
     <!-- под-экран: сама сессия -->
     <div id="learn-session" class="learn-session" hidden>
-      <div class="session-progress" id="session-progress">осталось: 0</div>
+      <div class="session-toprow">
+        <div class="session-progress" id="session-progress">осталось: 0</div>
+        <button class="card-delete-btn" id="card-delete-btn" aria-label="Удалить карточку">🗑</button>
+      </div>
 
       <div class="card-stage">
         <div class="index-card" id="flip-card">
@@ -119,7 +122,7 @@
     </div>
 
     <div id="listen-session" class="listen-session" hidden>
-      <div class="session-progress" id="listen-progress">1 / 1</div>
+      <div class="session-progress session-progress--standalone" id="listen-progress">1 / 1</div>
 
       <div class="card-stage">
         <div class="index-card index-card--static">
