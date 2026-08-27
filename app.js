@@ -158,6 +158,60 @@ $('#confirm-new-deck').addEventListener('click', async () => {
   renderDecks();
 });
 
+/* --- Объединение колод ------------------------------------------------------ */
+
+function langLabel(code) {
+  return (SPEECH_LANGUAGES.find((l) => l.code === code) || {}).label || code;
+}
+
+function deckOptionLabel(d) {
+  return `${d.name} (${langLabel(d.wordLang)} → ${langLabel(d.translationLang)}, ${d.cardCount})`;
+}
+
+$('#btn-merge-decks').addEventListener('click', async () => {
+  const decks = await getAllDecks();
+  if (decks.length < 2) { toast('Нужно минимум 2 колоды, чтобы объединять'); return; }
+
+  const fill = (selectEl, defaultIndex) => {
+    selectEl.innerHTML = decks.map((d, i) =>
+      `<option value="${d.id}"${i === defaultIndex ? ' selected' : ''}>${escapeHtml(deckOptionLabel(d))}</option>`
+    ).join('');
+  };
+  fill($('#select-merge-source'), 0);
+  fill($('#select-merge-target'), 1);
+
+  openModal('modal-merge');
+});
+
+$('#confirm-merge-decks').addEventListener('click', async () => {
+  const sourceId = Number($('#select-merge-source').value);
+  const targetId = Number($('#select-merge-target').value);
+
+  if (sourceId === targetId) { toast('Выбери две разные колоды'); return; }
+
+  const source = await getDeck(sourceId);
+  const target = await getDeck(targetId);
+
+  if (source.wordLang !== target.wordLang || source.translationLang !== target.translationLang) {
+    toast('У этих колод разные языки — объединять нельзя');
+    return;
+  }
+
+  closeModal();
+  askConfirm(
+    'Объединить колоды?',
+    `Все карточки из «${source.name}» переедут в «${target.name}» (дубли пропустятся), `
+    + `а колода «${source.name}» будет удалена. Это необратимо.`,
+    'Объединить',
+    async () => {
+      const { moved, skipped } = await mergeDecks(sourceId, targetId);
+      await ensureActiveDeck();
+      toast(`Готово! Перенесено: ${moved}${skipped ? `, пропущено дублей: ${skipped}` : ''}`);
+      renderDecks();
+    }
+  );
+});
+
 /* ---------------------------------------------------------------------- *
  * Список карточек активной колоды
  * ---------------------------------------------------------------------- */
@@ -273,6 +327,55 @@ $('#import-file-input').addEventListener('change', async (e) => {
   const { added, skipped } = await addCardsBulk(deckId, pairs);
   toast(`Добавлено: ${added}${skipped ? `, пропущено дублей: ${skipped}` : ''}`);
   renderCards();
+});
+
+/* --- Экспорт колоды -------------------------------------------------------- */
+
+function sanitizeFilename(name) {
+  return name.replace(/[^\p{L}\p{N}\-_ ]/gu, '_').trim() || 'deck';
+}
+
+function downloadFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function csvEscape(s) {
+  return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+$('#btn-export-cards').addEventListener('click', async () => {
+  const deckId = await ensureActiveDeck();
+  const { total } = await countCards(deckId);
+  if (total === 0) { toast('В колоде нет карточек для экспорта'); return; }
+  openModal('modal-export');
+});
+
+$('#export-as-json').addEventListener('click', async () => {
+  const deckId = await ensureActiveDeck();
+  const deck = await getDeck(deckId);
+  const cards = await getCardsByDeck(deckId);
+  const data = cards.map((c) => ({ word: c.word, translation: c.translation }));
+  downloadFile(`${sanitizeFilename(deck.name)}.json`, JSON.stringify(data, null, 2), 'application/json');
+  closeModal();
+  toast(`Скачано: ${cards.length} карточек`);
+});
+
+$('#export-as-csv').addEventListener('click', async () => {
+  const deckId = await ensureActiveDeck();
+  const deck = await getDeck(deckId);
+  const cards = await getCardsByDeck(deckId);
+  const lines = ['word,translation', ...cards.map((c) => `${csvEscape(c.word)},${csvEscape(c.translation)}`)];
+  downloadFile(`${sanitizeFilename(deck.name)}.csv`, lines.join('\n'), 'text/csv');
+  closeModal();
+  toast(`Скачано: ${cards.length} карточек`);
 });
 
 function parseCsvPairs(text) {

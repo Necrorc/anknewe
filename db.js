@@ -114,6 +114,20 @@ async function deleteDeck(deckId) {
   await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
 }
 
+/**
+ * Переносит все карточки из sourceId в targetId (пропуская дубли — те же
+ * правила, что и при обычном импорте), затем удаляет исходную колоду.
+ * Возвращает { moved, skipped }.
+ */
+async function mergeDecks(sourceId, targetId) {
+  if (sourceId === targetId) return { moved: 0, skipped: 0 };
+  const sourceCards = await getCardsByDeck(sourceId);
+  const pairs = sourceCards.map((c) => [c.word, c.translation]);
+  const { added, skipped } = await addCardsBulk(targetId, pairs);
+  await deleteDeck(sourceId);
+  return { moved: added, skipped };
+}
+
 async function getSetting(key) {
   const t = await tx('settings', 'readonly');
   const row = await reqToPromise(t.objectStore('settings').get(key));

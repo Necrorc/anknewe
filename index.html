@@ -32,6 +32,9 @@
     <button class="btn-tab-new" id="btn-new-deck">
       <span class="plus">+</span> Новая колода
     </button>
+    <button class="btn-tab-new btn-tab-new--secondary" id="btn-merge-decks">
+      🔗 Объединить колоды
+    </button>
   </section>
 
   <!-- ===================== ЭКРАН: КАРТОЧКИ (список активной колоды) ===================== -->
@@ -44,6 +47,7 @@
     <div class="card-toolbar">
       <button class="btn-brass" id="btn-add-card">+ Добавить</button>
       <button class="btn-brass" id="btn-import-cards">Импорт файла</button>
+      <button class="btn-ghost" id="btn-export-cards">Экспорт</button>
       <button class="btn-ghost" id="btn-dedup">Убрать дубли</button>
       <button class="btn-ghost btn-danger" id="btn-delete-all">Очистить колоду</button>
     </div>
@@ -217,6 +221,34 @@
     <div class="modal-actions">
       <button class="btn-ghost" data-close>Отмена</button>
       <button class="btn-danger-solid" id="confirm-action-btn">Удалить</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-export" hidden>
+    <h2>Экспорт колоды</h2>
+    <p class="modal-hint">Скачает файл со всеми карточками активной колоды — его потом можно
+      будет снова загрузить через «Импорт файла», в этом или другом устройстве.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-brass" id="export-as-csv">Скачать .csv</button>
+      <button class="btn-brass" id="export-as-json">Скачать .json</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-merge" hidden>
+    <h2>Объединить колоды</h2>
+    <p class="modal-hint">Работает только для колод с одинаковой языковой парой (слово/перевод).
+      Карточки первой колоды переедут во вторую (дубли пропустятся), а первая колода удалится.</p>
+
+    <label class="select-label">Объединить колоду</label>
+    <select id="select-merge-source" class="modal-select"></select>
+
+    <label class="select-label">...в колоду</label>
+    <select id="select-merge-target" class="modal-select"></select>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-brass" id="confirm-merge-decks">Объединить</button>
     </div>
   </div>
 

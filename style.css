@@ -121,6 +121,13 @@ button { font-family: inherit; cursor: pointer; border: none; }
 }
 .btn-tab-new .plus { font-size: 18px; margin-right: 4px; }
 
+.btn-tab-new--secondary {
+  color: var(--text-onbg-dim);
+  border-color: var(--hairline);
+  font-size: 13.5px;
+  padding: 11px;
+}
+
 /* ==========================================================================
    Экран: Колоды
    ========================================================================== */
