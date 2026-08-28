@@ -488,6 +488,7 @@ async function startLearnSession(mode) {
   state.learn.queue = ids;
   state.learn.directions = directions;
   state.learn.sessionTotal = ids.length;
+  state.learn.scoredCards = new Set(); // карточки, для которых уже учтена первая попытка
 
   $('#learn-setup').hidden = true;
   $('#learn-empty').hidden = true;
@@ -553,7 +554,15 @@ $('#card-speak-btn').addEventListener('click', (e) => {
 async function answerCurrent(correct) {
   const cur = state.learn.current;
   if (!cur) return;
-  await updateCardProgress(cur.id, correct);
+
+  // Интервал повторения обновляем только по ПЕРВОЙ попытке за сессию —
+  // иначе при "повторяем, пока не выучишь" итог всегда почти положительный
+  // (последний ответ), и по-настоящему сложные слова не отличались бы от
+  // выученных с первого раза.
+  if (!state.learn.scoredCards.has(cur.id)) {
+    await updateCardProgress(cur.id, correct);
+    state.learn.scoredCards.add(cur.id);
+  }
 
   const { queue } = state.learn;
   if (queue[0] === cur.id) {
