@@ -75,7 +75,7 @@
     <div id="learn-session" class="learn-session" hidden>
       <div class="session-toprow">
         <div class="session-progress" id="session-progress">осталось: 0</div>
-        <button class="card-delete-btn" id="card-delete-btn" aria-label="Удалить карточку">🗑</button>
+        <button class="card-delete-btn" id="card-delete-btn-top" aria-label="Удалить карточку">🗑</button>
       </div>
 
       <div class="card-stage">
@@ -92,6 +92,10 @@
         <button class="stamp stamp-no" id="btn-dont-know">✗<br>НЕ ЗНАЛ</button>
         <button class="stamp stamp-yes" id="btn-know">✓<br>ЗНАЛ</button>
       </div>
+
+      <button class="btn-ghost btn-danger btn-wide card-delete-btn-bottom" id="card-delete-btn-bottom" hidden>
+        🗑 Удалить карточку
+      </button>
     </div>
 
     <!-- под-экран: пусто / завершено -->
@@ -159,6 +163,35 @@
     <div class="stat-grid" id="stat-grid"></div>
   </section>
 
+  <!-- ===================== ЭКРАН: НАСТРОЙКИ ===================== -->
+  <section class="view" id="view-settings" data-view="settings">
+    <header class="view-header">
+      <h1 class="view-title">Настройки</h1>
+      <p class="view-sub">Поведение приложения на этом устройстве</p>
+    </header>
+
+    <div class="settings-group">
+      <label class="toggle-row toggle-row--settings">
+        <input type="checkbox" id="setting-confirm-delete" checked>
+        <span>Подтверждать удаление карточки</span>
+      </label>
+      <p class="settings-hint">Если выключить — карточка будет удаляться сразу по нажатию 🗑,
+        без всплывающего вопроса «Уверен?».</p>
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-label">Кнопка удаления карточки в «Учить»</p>
+      <label class="radio-row">
+        <input type="radio" name="delete-btn-position" id="setting-delpos-top" value="top">
+        <span>Сверху, рядом со счётчиком «осталось выучить»</span>
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="delete-btn-position" id="setting-delpos-stamps" value="stamps">
+        <span>Внизу, под кнопками «Знал» / «Не знал»</span>
+      </label>
+    </div>
+  </section>
+
   <!-- ===================== НИЖНЕЕ МЕНЮ ===================== -->
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn is-active" data-target="decks">
@@ -180,6 +213,10 @@
     <button class="tab-btn" data-target="stats">
       <svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
       <span>Статистика</span>
+    </button>
+    <button class="tab-btn" data-target="settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.4 7.4 0 000-2l2-1.5-2-3.4-2.4 1a7.6 7.6 0 00-1.7-1L15 3h-6l-.3 2.6a7.6 7.6 0 00-1.7 1l-2.4-1-2 3.4L4.6 11a7.4 7.4 0 000 2l-2 1.5 2 3.4 2.4-1a7.6 7.6 0 001.7 1L9 21h6l.3-2.6a7.6 7.6 0 001.7-1l2.4 1 2-3.4z"/></svg>
+      <span>Настройки</span>
     </button>
   </nav>
 </div>

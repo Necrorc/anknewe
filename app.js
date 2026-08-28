@@ -19,6 +19,10 @@ const state = {
     sessionActive: false,
   },
   pendingConfirm: null,   // функция, которая выполнится по подтверждению в модалке
+  settings: {
+    confirmDeleteCard: true,      // спрашивать подтверждение перед удалением карточки
+    deleteButtonPosition: 'top',  // 'top' | 'stamps' — где показывать 🗑 в режиме "Учить"
+  },
 };
 
 /* ---------------------------------------------------------------------- *
@@ -36,6 +40,7 @@ function showView(name) {
   if (name === 'learn') renderLearnSetup();
   if (name === 'listen') renderListenSetup();
   if (name === 'stats') renderStats();
+  if (name === 'settings') renderSettingsView();
 }
 
 let toastTimer = null;
@@ -563,26 +568,39 @@ $('#btn-know').addEventListener('click', () => answerCurrent(true));
 $('#btn-dont-know').addEventListener('click', () => answerCurrent(false));
 $('#btn-learn-again').addEventListener('click', renderLearnSetup);
 
-$('#card-delete-btn').addEventListener('click', () => {
+async function deleteCurrentLearnCard() {
   const cur = state.learn.current;
   if (!cur) return;
+  await deleteCard(cur.id);
+
+  const { queue } = state.learn;
+  if (queue[0] === cur.id) queue.shift();
+  // удалённая карточка никогда не будет "выучена" — не учитываем её в итоговом счёте сессии
+  if (state.learn.sessionTotal > 0) state.learn.sessionTotal -= 1;
+
+  toast('Карточка удалена');
+  await showNextCard();
+}
+
+function handleDeleteCardClick() {
+  const cur = state.learn.current;
+  if (!cur) return;
+
+  if (!state.settings.confirmDeleteCard) {
+    deleteCurrentLearnCard();
+    return;
+  }
+
   askConfirm(
     'Удалить карточку?',
     `«${cur.front}» → «${cur.back}» будет удалена из колоды безвозвратно.`,
     'Удалить',
-    async () => {
-      await deleteCard(cur.id);
-
-      const { queue } = state.learn;
-      if (queue[0] === cur.id) queue.shift();
-      // удалённая карточка никогда не будет "выучена" — не учитываем её в итоговом счёте сессии
-      if (state.learn.sessionTotal > 0) state.learn.sessionTotal -= 1;
-
-      toast('Карточка удалена');
-      await showNextCard();
-    }
+    deleteCurrentLearnCard
   );
-});
+}
+
+$('#card-delete-btn-top').addEventListener('click', handleDeleteCardClick);
+$('#card-delete-btn-bottom').addEventListener('click', handleDeleteCardClick);
 
 /* ---------------------------------------------------------------------- *
  * Слушать (озвучка карточек подряд)
@@ -715,6 +733,46 @@ async function renderStats() {
 }
 
 /* ---------------------------------------------------------------------- *
+ * Настройки
+ * ---------------------------------------------------------------------- */
+
+async function loadSettings() {
+  const confirmDelete = await getSetting('confirmDeleteCard');
+  const delPos = await getSetting('deleteButtonPosition');
+  state.settings.confirmDeleteCard = confirmDelete === null ? true : !!confirmDelete;
+  state.settings.deleteButtonPosition = delPos === null ? 'top' : delPos;
+}
+
+function renderSettingsView() {
+  $('#setting-confirm-delete').checked = state.settings.confirmDeleteCard;
+  $('#setting-delpos-top').checked = state.settings.deleteButtonPosition === 'top';
+  $('#setting-delpos-stamps').checked = state.settings.deleteButtonPosition === 'stamps';
+}
+
+/** Показывает верхнюю или нижнюю кнопку удаления карточки согласно настройке. */
+function applyDeleteButtonPosition() {
+  const isTop = state.settings.deleteButtonPosition !== 'stamps';
+  $('#card-delete-btn-top').hidden = !isTop;
+  $('#card-delete-btn-bottom').hidden = isTop;
+}
+
+$('#setting-confirm-delete').addEventListener('change', async (e) => {
+  state.settings.confirmDeleteCard = e.target.checked;
+  await setSetting('confirmDeleteCard', e.target.checked);
+});
+
+$('#setting-delpos-top').addEventListener('change', async () => {
+  state.settings.deleteButtonPosition = 'top';
+  await setSetting('deleteButtonPosition', 'top');
+  applyDeleteButtonPosition();
+});
+$('#setting-delpos-stamps').addEventListener('change', async () => {
+  state.settings.deleteButtonPosition = 'stamps';
+  await setSetting('deleteButtonPosition', 'stamps');
+  applyDeleteButtonPosition();
+});
+
+/* ---------------------------------------------------------------------- *
  * Общая инициализация
  * ---------------------------------------------------------------------- */
 
@@ -735,6 +793,8 @@ $('#confirm-action-btn').addEventListener('click', async () => {
 
 window.addEventListener('DOMContentLoaded', async () => {
   await ensureActiveDeck();
+  await loadSettings();
+  applyDeleteButtonPosition();
   showView('decks');
 
   if ('serviceWorker' in navigator) {
