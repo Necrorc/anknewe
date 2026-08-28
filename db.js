@@ -272,7 +272,7 @@ async function getDueCards(deckId, limit = 20) {
 async function updateCardProgress(id, correct) {
   const card = await getCard(id);
   if (!card) return;
-  let box = correct ? Math.min(card.box + 1, 5) : 0;
+  let box = correct ? Math.min(card.box + 1, 5) : 1;
   const days = INTERVALS[box];
   const next = new Date();
   next.setDate(next.getDate() + days);
