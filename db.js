@@ -224,6 +224,26 @@ async function deleteCard(id) {
   await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
 }
 
+/**
+ * Меняет слово/перевод существующей карточки. Если в той же колоде уже есть
+ * другая карточка с такой же парой слово+перевод — правка отклоняется как дубль.
+ * Возвращает true при успехе, false если это создало бы дубль.
+ */
+async function updateCard(id, word, translation) {
+  const card = await getCard(id);
+  if (!card) return false;
+
+  const w = word.trim(), tr = translation.trim();
+  const siblings = await getCardsByDeck(card.deckId);
+  const wouldDuplicate = siblings.some((c) => c.id !== id && c.word === w && c.translation === tr);
+  if (wouldDuplicate) return false;
+
+  const t = await tx('cards', 'readwrite');
+  t.objectStore('cards').put({ ...card, word: w, translation: tr });
+  await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+  return true;
+}
+
 async function deleteAllCardsInDeck(deckId) {
   const cards = await getCardsByDeck(deckId);
   const t = await tx('cards', 'readwrite');

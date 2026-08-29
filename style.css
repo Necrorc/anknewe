@@ -210,6 +210,7 @@ button { font-family: inherit; cursor: pointer; border: none; }
 .entry-arrow { color: var(--text-onbg-dim); font-size: 12px; }
 .entry-translation { font-family: var(--font-serif); font-size: 14.5px; color: var(--text-onbg-dim); flex: 1; }
 .entry-box { font-family: var(--font-mono); font-size: 11px; color: var(--stamp-green); flex-shrink: 0; }
+.entry-edit { background: transparent; font-size: 14px; padding: 2px 4px; flex-shrink: 0; }
 .entry-del { background: transparent; color: var(--text-onbg-dim); font-size: 16px; padding: 2px 6px; flex-shrink: 0; }
 
 .empty-hint {

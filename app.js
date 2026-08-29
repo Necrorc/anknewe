@@ -246,8 +246,10 @@ async function renderCards() {
       <span class="entry-arrow">→</span>
       <span class="entry-translation">${escapeHtml(c.translation)}</span>
       <span class="entry-box">ур.${c.box}</span>
+      <button class="entry-edit" data-id="${c.id}">✏️</button>
       <button class="entry-del" data-id="${c.id}">✕</button>
     `;
+    row.querySelector('.entry-edit').addEventListener('click', () => openEditCardModal(c));
     row.querySelector('.entry-del').addEventListener('click', () => {
       askConfirm('Удалить карточку?', `«${c.word}» → «${c.translation}»`, 'Удалить', async () => {
         await deleteCard(c.id);
@@ -258,6 +260,31 @@ async function renderCards() {
     list.appendChild(row);
   });
 }
+
+let editingCardId = null;
+
+function openEditCardModal(card) {
+  editingCardId = card.id;
+  $('#input-edit-card-word').value = card.word;
+  $('#input-edit-card-translation').value = card.translation;
+  openModal('modal-edit-card');
+  setTimeout(() => $('#input-edit-card-word').focus(), 50);
+}
+
+$('#confirm-edit-card').addEventListener('click', async () => {
+  const word = $('#input-edit-card-word').value.trim();
+  const translation = $('#input-edit-card-translation').value.trim();
+  if (!word || !translation) { toast('Заполни оба поля'); return; }
+
+  const ok = await updateCard(editingCardId, word, translation);
+  closeModal();
+  if (ok) {
+    toast('Карточка обновлена');
+    renderCards();
+  } else {
+    toast('Такая пара слово/перевод уже есть в колоде — не стал дублировать');
+  }
+});
 
 $('#btn-add-card').addEventListener('click', () => {
   $('#input-card-word').value = '';
