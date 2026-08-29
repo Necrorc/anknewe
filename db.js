@@ -280,3 +280,21 @@ async function updateCardProgress(id, correct) {
   t.objectStore('cards').put({ ...card, box, nextReview: next.toISOString() });
   await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
 }
+
+/**
+ * Сбрасывает уровень (box) всех карточек колоды до targetBox и делает их
+ * сразу доступными к повторению (nextReview = сейчас). Сами карточки не
+ * удаляются — только прогресс повторения. Возвращает количество изменённых карточек.
+ */
+async function resetDeckLevels(deckId, targetBox) {
+  const cards = await getCardsByDeck(deckId);
+  if (!cards.length) return 0;
+  const now = new Date().toISOString();
+  const t = await tx('cards', 'readwrite');
+  const store = t.objectStore('cards');
+  for (const c of cards) {
+    store.put({ ...c, box: targetBox, nextReview: now });
+  }
+  await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+  return cards.length;
+}

@@ -284,6 +284,32 @@ $('#btn-dedup').addEventListener('click', async () => {
   renderCards();
 });
 
+$('#btn-reset-levels').addEventListener('click', async () => {
+  const deckId = await ensureActiveDeck();
+  const { total } = await countCards(deckId);
+  if (total === 0) { toast('В колоде нет карточек'); return; }
+  openModal('modal-reset-levels');
+});
+
+function confirmResetLevels(targetBox) {
+  closeModal();
+  askConfirm(
+    'Сбросить уровни карточек?',
+    `У всех карточек активной колоды уровень станет ${targetBox}, и все они сразу станут `
+    + 'доступны к повторению. Карточки не удаляются — сбрасывается только прогресс.',
+    'Сбросить',
+    async () => {
+      const deckId = await ensureActiveDeck();
+      const n = await resetDeckLevels(deckId, targetBox);
+      toast(`Уровень сброшен до ${targetBox} у ${n} карточек`);
+      renderCards();
+    }
+  );
+}
+
+$('#reset-levels-to-1').addEventListener('click', () => confirmResetLevels(1));
+$('#reset-levels-to-0').addEventListener('click', () => confirmResetLevels(0));
+
 $('#btn-delete-all').addEventListener('click', async () => {
   const deckId = await ensureActiveDeck();
   const deck = await getDeck(deckId);

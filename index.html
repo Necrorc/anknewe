@@ -49,6 +49,7 @@
       <button class="btn-brass" id="btn-import-cards">Импорт файла</button>
       <button class="btn-ghost" id="btn-export-cards">Экспорт</button>
       <button class="btn-ghost" id="btn-dedup">Убрать дубли</button>
+      <button class="btn-ghost" id="btn-reset-levels">Сбросить уровни</button>
       <button class="btn-ghost btn-danger" id="btn-delete-all">Очистить колоду</button>
     </div>
 
@@ -286,6 +287,16 @@
     <div class="modal-actions">
       <button class="btn-ghost" data-close>Отмена</button>
       <button class="btn-brass" id="confirm-merge-decks">Объединить</button>
+    </div>
+  </div>
+  <div class="modal" id="modal-reset-levels" hidden>
+    <h2>Сбросить уровни карточек</h2>
+    <p class="modal-hint">Карточки не удаляются — сбрасывается только их прогресс повторения,
+      и все они сразу становятся доступны к повторению. Действие затрагивает всю активную колоду.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-brass" id="reset-levels-to-1">До уровня 1</button>
+      <button class="btn-brass" id="reset-levels-to-0">До уровня 0</button>
     </div>
   </div>
 
