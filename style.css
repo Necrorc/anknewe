@@ -260,9 +260,14 @@ button { font-family: inherit; cursor: pointer; border: none; }
   letter-spacing: .5px;
 }
 
-.card-delete-btn {
+.session-toprow-actions {
   position: absolute;
   right: 0;
+  display: flex;
+  gap: 4px;
+}
+
+.card-icon-btn {
   background: transparent;
   color: var(--text-onbg-dim);
   font-size: 16px;
@@ -273,10 +278,18 @@ button { font-family: inherit; cursor: pointer; border: none; }
   align-items: center;
   justify-content: center;
 }
-.card-delete-btn:active { color: var(--stamp-red); background: var(--bg-raised); }
-.card-delete-btn[hidden] { display: none; }
+.card-icon-btn:active { background: var(--bg-raised); }
+.card-icon-btn[hidden] { display: none; }
+#card-delete-btn-top:active { color: var(--stamp-red); }
+#card-edit-btn-top:active { color: var(--brass); }
 
-.card-delete-btn-bottom { margin-top: 4px; }
+.card-actions-bottom-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.card-action-flex { flex: 1; text-align: center; }
+.card-action-flex[hidden] { display: none; }
 
 .session-progress--standalone { margin-bottom: 14px; }
 

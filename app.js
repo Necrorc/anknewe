@@ -262,9 +262,11 @@ async function renderCards() {
 }
 
 let editingCardId = null;
+let editCardSavedCallback = null;
 
-function openEditCardModal(card) {
+function openEditCardModal(card, onSaved) {
   editingCardId = card.id;
+  editCardSavedCallback = onSaved || renderCards;
   $('#input-edit-card-word').value = card.word;
   $('#input-edit-card-translation').value = card.translation;
   openModal('modal-edit-card');
@@ -280,7 +282,7 @@ $('#confirm-edit-card').addEventListener('click', async () => {
   closeModal();
   if (ok) {
     toast('Карточка обновлена');
-    renderCards();
+    if (editCardSavedCallback) await editCardSavedCallback();
   } else {
     toast('Такая пара слово/перевод уже есть в колоде — не стал дублировать');
   }
@@ -583,6 +585,7 @@ async function showNextCard() {
   $('#card-back-text').hidden = true;
   $('#card-tap-hint').hidden = false;
   $('#stamp-row').hidden = true;
+  applyDeleteButtonPosition();
 }
 
 $('#flip-card').addEventListener('click', () => {
@@ -593,6 +596,7 @@ $('#flip-card').addEventListener('click', () => {
   $('#card-back-text').hidden = false;
   $('#card-tap-hint').hidden = true;
   $('#stamp-row').hidden = false;
+  applyDeleteButtonPosition();
 });
 
 $('#card-speak-btn').addEventListener('click', (e) => {
@@ -663,6 +667,28 @@ function handleDeleteCardClick() {
 
 $('#card-delete-btn-top').addEventListener('click', handleDeleteCardClick);
 $('#card-delete-btn-bottom').addEventListener('click', handleDeleteCardClick);
+
+async function openEditFromLearn() {
+  const cur = state.learn.current;
+  if (!cur) return;
+  const card = await getCard(cur.id);
+  if (!card) return;
+
+  openEditCardModal(card, async () => {
+    // Карточка сохранена — обновляем то, что уже показано на экране, без перезапуска сессии
+    const updated = await getCard(cur.id);
+    if (!updated) return;
+    const direction = state.learn.directions[cur.id] || 'wt';
+    const front = direction === 'tw' ? updated.translation : updated.word;
+    const back = direction === 'tw' ? updated.word : updated.translation;
+    state.learn.current = { ...cur, front, back };
+    $('#card-front-text').textContent = front;
+    $('#card-back-text').textContent = back;
+  });
+}
+
+$('#card-edit-btn-top').addEventListener('click', openEditFromLearn);
+$('#card-edit-btn-bottom').addEventListener('click', openEditFromLearn);
 
 /* ---------------------------------------------------------------------- *
  * Слушать (озвучка карточек подряд)
@@ -811,11 +837,15 @@ function renderSettingsView() {
   $('#setting-delpos-stamps').checked = state.settings.deleteButtonPosition === 'stamps';
 }
 
-/** Показывает верхнюю или нижнюю кнопку удаления карточки согласно настройке. */
+/** Показывает верхние/нижние кнопки удаления и редактирования согласно настройке и состоянию карточки. */
 function applyDeleteButtonPosition() {
   const isTop = state.settings.deleteButtonPosition !== 'stamps';
+  const revealed = !!state.learn.revealed;
   $('#card-delete-btn-top').hidden = !isTop;
   $('#card-delete-btn-bottom').hidden = isTop;
+  // Кнопку редактирования показываем только когда виден ответ (карточка перевёрнута)
+  $('#card-edit-btn-top').hidden = !isTop || !revealed;
+  $('#card-edit-btn-bottom').hidden = isTop || !revealed;
 }
 
 $('#setting-confirm-delete').addEventListener('change', async (e) => {

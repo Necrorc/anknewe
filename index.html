@@ -76,7 +76,10 @@
     <div id="learn-session" class="learn-session" hidden>
       <div class="session-toprow">
         <div class="session-progress" id="session-progress">осталось: 0</div>
-        <button class="card-delete-btn" id="card-delete-btn-top" aria-label="Удалить карточку">🗑</button>
+        <div class="session-toprow-actions">
+          <button class="card-icon-btn" id="card-edit-btn-top" aria-label="Редактировать карточку" hidden>✏️</button>
+          <button class="card-icon-btn" id="card-delete-btn-top" aria-label="Удалить карточку">🗑</button>
+        </div>
       </div>
 
       <div class="card-stage">
@@ -94,9 +97,10 @@
         <button class="stamp stamp-yes" id="btn-know">✓<br>ЗНАЛ</button>
       </div>
 
-      <button class="btn-ghost btn-danger btn-wide card-delete-btn-bottom" id="card-delete-btn-bottom" hidden>
-        🗑 Удалить карточку
-      </button>
+      <div class="card-actions-bottom-row">
+        <button class="btn-ghost card-action-flex" id="card-edit-btn-bottom" hidden>✏️ Редактировать</button>
+        <button class="btn-ghost btn-danger card-action-flex" id="card-delete-btn-bottom" hidden>🗑 Удалить</button>
+      </div>
     </div>
 
     <!-- под-экран: пусто / завершено -->
