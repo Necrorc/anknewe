@@ -12,6 +12,7 @@ const state = {
     sessionTotal: 0,
     current: null,        // карточка, которая сейчас показана
     revealed: false,
+    hasRevealedOnce: false, // была ли карточка хоть раз перевёрнута в этом показе (для печатей знал/не знал)
   },
   listen: {
     speaker: null,        // экземпляр CardSpeaker
@@ -578,25 +579,37 @@ async function showNextCard() {
 
   state.learn.current = { id: cardId, front, back, frontLang, backLang };
   state.learn.revealed = false;
+  state.learn.hasRevealedOnce = false;
 
   $('#session-progress').textContent = `осталось выучить: ${new Set(queue).size}`;
-  $('#card-front-text').textContent = front;
-  $('#card-front-text').hidden = false;
-  $('#card-back-text').hidden = true;
+  renderCardFace();
+}
+
+/** Отрисовывает текущую сторону карточки (лицевую или обратную) согласно state.learn.revealed. */
+function renderCardFace() {
+  const cur = state.learn.current;
+  if (!cur) return;
+  const revealed = state.learn.revealed;
+
+  $('#card-front-text').textContent = cur.front;
+  $('#card-back-text').textContent = cur.back;
+  $('#card-front-text').hidden = revealed;
+  $('#card-back-text').hidden = !revealed;
+  $('#card-tap-hint').textContent = revealed
+    ? 'нажми ещё раз, чтобы снова увидеть слово'
+    : 'нажми, чтобы перевернуть';
   $('#card-tap-hint').hidden = false;
-  $('#stamp-row').hidden = true;
+  // Пока карточка не перевёрнута ни разу — печатей "знал/не знал" ещё не видно,
+  // но дальше при перелистывании туда-обратно они остаются на месте
+  $('#stamp-row').hidden = !state.learn.hasRevealedOnce;
   applyDeleteButtonPosition();
 }
 
 $('#flip-card').addEventListener('click', () => {
-  if (!state.learn.current || state.learn.revealed) return;
-  state.learn.revealed = true;
-  $('#card-back-text').textContent = state.learn.current.back;
-  $('#card-front-text').hidden = true;
-  $('#card-back-text').hidden = false;
-  $('#card-tap-hint').hidden = true;
-  $('#stamp-row').hidden = false;
-  applyDeleteButtonPosition();
+  if (!state.learn.current) return;
+  state.learn.revealed = !state.learn.revealed;
+  if (state.learn.revealed) state.learn.hasRevealedOnce = true;
+  renderCardFace();
 });
 
 $('#card-speak-btn').addEventListener('click', (e) => {
