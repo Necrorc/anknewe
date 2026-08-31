@@ -156,6 +156,10 @@ const TRANSLATIONS = {
     'settings.deletePositionTop': 'Сверху, рядом со счётчиком «осталось выучить»',
     'settings.deletePositionStamps': 'Внизу, под кнопками «Знал» / «Не знал»',
     'settings.languageLabel': 'Язык приложения',
+    'settings.themeLabel': 'Тема оформления',
+    'settings.themeSystem': 'Как в системе',
+    'settings.themeLight': 'Светлая',
+    'settings.themeDark': 'Тёмная',
 
     'common.cancel': 'Отмена',
     'common.delete': 'Удалить',
@@ -332,6 +336,10 @@ const TRANSLATIONS = {
     'settings.deletePositionTop': 'At the top, next to the "left to learn" counter',
     'settings.deletePositionStamps': 'At the bottom, under "Knew it" / "Didn\'t know"',
     'settings.languageLabel': 'App language',
+    'settings.themeLabel': 'Theme',
+    'settings.themeSystem': 'Match system',
+    'settings.themeLight': 'Light',
+    'settings.themeDark': 'Dark',
 
     'common.cancel': 'Cancel',
     'common.delete': 'Delete',
@@ -508,6 +516,10 @@ const TRANSLATIONS = {
     'settings.deletePositionTop': 'Na górze, przy liczniku „zostało do nauki”',
     'settings.deletePositionStamps': 'Na dole, pod przyciskami „Znałem” / „Nie znałem”',
     'settings.languageLabel': 'Język aplikacji',
+    'settings.themeLabel': 'Motyw',
+    'settings.themeSystem': 'Jak w systemie',
+    'settings.themeLight': 'Jasny',
+    'settings.themeDark': 'Ciemny',
 
     'common.cancel': 'Anuluj',
     'common.delete': 'Usuń',

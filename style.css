@@ -97,6 +97,87 @@
   }
 }
 
+/*
+ * Ручной выбор темы в настройках (независимо от системных настроек устройства).
+ * [data-theme="dark"]/[data-theme="light"] на <html> имеют бОльшую специфичность
+ * (селектор-атрибут), чем просто ":root" внутри media-запроса выше — поэтому эти
+ * правила побеждают его в любую сторону: можно навсегда закрепить тёмную тему,
+ * даже если в системе выбрана светлая, и наоборот.
+ * Без явного data-theme (значение "Как в системе") ничего не меняется —
+ * работает автоматика из prefers-color-scheme выше.
+ */
+:root[data-theme="dark"] {
+  --bg: #14161D;
+  --bg-elevated: #1D2029;
+  --bg-sunken: #10121A;
+  --bg-hover: #262A36;
+
+  --text-primary: #EEF0F6;
+  --text-secondary: #9BA1B0;
+  --text-tertiary: #6C7180;
+  --text-on-accent: #FFFFFF;
+
+  --border: #2B2F3B;
+  --border-strong: #3A3F4E;
+
+  --accent: #8B85FF;
+  --accent-hover: #9D97FF;
+  --accent-active: #7A73FF;
+  --accent-soft: rgba(139, 133, 255, .16);
+  --accent-soft-strong: rgba(139, 133, 255, .26);
+
+  --success: #3DD68C;
+  --success-soft: rgba(61, 214, 140, .14);
+  --danger: #FF6B6B;
+  --danger-hover: #FF8585;
+  --danger-soft: rgba(255, 107, 107, .14);
+  --warning: #F0B429;
+  --warning-soft: rgba(240, 180, 41, .14);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, .35);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 20px 48px rgba(0, 0, 0, .55);
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #F6F7FB;
+  --bg-elevated: #FFFFFF;
+  --bg-sunken: #EEF0F5;
+  --bg-hover: #ECEDF5;
+
+  --text-primary: #1B1E28;
+  --text-secondary: #667085;
+  --text-tertiary: #9AA1B1;
+  --text-on-accent: #FFFFFF;
+
+  --border: #E4E6EF;
+  --border-strong: #D2D5E1;
+
+  --accent: #6C63FF;
+  --accent-hover: #5A50F0;
+  --accent-active: #4C42E0;
+  --accent-soft: #EEECFF;
+  --accent-soft-strong: #DEDAFF;
+
+  --success: #1E9E63;
+  --success-soft: #E3F8ED;
+  --danger: #E14F4F;
+  --danger-hover: #C93F3F;
+  --danger-soft: #FCEAEA;
+  --warning: #C98A1F;
+  --warning-soft: #FBF0DD;
+
+  --shadow-xs: 0 1px 2px rgba(20, 22, 40, .05);
+  --shadow-sm: 0 2px 8px rgba(20, 22, 40, .06);
+  --shadow-md: 0 8px 24px rgba(20, 22, 40, .10);
+  --shadow-lg: 0 16px 40px rgba(20, 22, 40, .16);
+
+  color-scheme: light;
+}
+
 /* ==========================================================================
    Сброс и база
    ========================================================================== */

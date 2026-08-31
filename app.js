@@ -26,6 +26,7 @@ const state = {
     confirmDeleteCard: true,      // спрашивать подтверждение перед удалением карточки
     deleteButtonPosition: 'top',  // 'top' | 'stamps' — где показывать 🗑 в режиме "Учить"
     appLanguage: 'ru',            // 'ru' | 'en' | 'pl'
+    theme: 'system',              // 'system' | 'light' | 'dark'
   },
 };
 
@@ -1076,10 +1077,32 @@ async function loadSettings() {
   const confirmDelete = await getSetting('confirmDeleteCard');
   const delPos = await getSetting('deleteButtonPosition');
   const appLang = await getSetting('appLanguage');
+  const theme = await getSetting('theme');
   state.settings.confirmDeleteCard = confirmDelete === null ? true : !!confirmDelete;
   state.settings.deleteButtonPosition = delPos === null ? 'top' : delPos;
   state.settings.appLanguage = appLang === null ? 'ru' : appLang;
+  state.settings.theme = theme === null ? 'system' : theme;
   setLang(state.settings.appLanguage);
+  applyTheme(state.settings.theme);
+}
+
+/**
+ * Применяет тему оформления. 'system' — ничего не форсируем, работает
+ * автоматика по prefers-color-scheme из CSS; 'light'/'dark' — жёстко
+ * фиксируем через [data-theme] на <html>, независимо от системных настроек
+ * устройства (специфичность атрибутного селектора в CSS выше, чем у
+ * ":root" внутри media-запроса, поэтому это всегда побеждает).
+ */
+function applyTheme(theme) {
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  // Подстраиваем цвет системной шторки/статус-бара под реально применённую тему
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  const meta = $('#meta-theme-color');
+  if (meta && bg) meta.setAttribute('content', bg);
 }
 
 function renderSettingsView() {
@@ -1089,6 +1112,9 @@ function renderSettingsView() {
   $('#setting-lang-ru').checked = state.settings.appLanguage === 'ru';
   $('#setting-lang-en').checked = state.settings.appLanguage === 'en';
   $('#setting-lang-pl').checked = state.settings.appLanguage === 'pl';
+  $('#setting-theme-system').checked = state.settings.theme === 'system';
+  $('#setting-theme-light').checked = state.settings.theme === 'light';
+  $('#setting-theme-dark').checked = state.settings.theme === 'dark';
 }
 
 /** Показывает верхние/нижние кнопки удаления и редактирования согласно настройке и состоянию карточки. */
@@ -1130,6 +1156,16 @@ async function changeAppLanguage(lang) {
 $('#setting-lang-ru').addEventListener('change', () => changeAppLanguage('ru'));
 $('#setting-lang-en').addEventListener('change', () => changeAppLanguage('en'));
 $('#setting-lang-pl').addEventListener('change', () => changeAppLanguage('pl'));
+
+async function changeTheme(theme) {
+  state.settings.theme = theme;
+  applyTheme(theme);
+  await setSetting('theme', theme);
+}
+
+$('#setting-theme-system').addEventListener('change', () => changeTheme('system'));
+$('#setting-theme-light').addEventListener('change', () => changeTheme('light'));
+$('#setting-theme-dark').addEventListener('change', () => changeTheme('dark'));
 
 /* ---------------------------------------------------------------------- *
  * Общая инициализация

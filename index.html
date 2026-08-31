@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="Картотека">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#14171A">
+<meta name="theme-color" content="#F6F7FB" id="meta-theme-color">
 
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="style.css">
@@ -202,6 +202,22 @@
       <label class="radio-row">
         <input type="radio" name="app-language" id="setting-lang-pl" value="pl">
         <span data-i18n="appLang.pl">Polski</span>
+      </label>
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-label" data-i18n="settings.themeLabel">Тема оформления</p>
+      <label class="radio-row">
+        <input type="radio" name="app-theme" id="setting-theme-system" value="system">
+        <span data-i18n="settings.themeSystem">Как в системе</span>
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="app-theme" id="setting-theme-light" value="light">
+        <span data-i18n="settings.themeLight">Светлая</span>
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="app-theme" id="setting-theme-dark" value="dark">
+        <span data-i18n="settings.themeDark">Тёмная</span>
       </label>
     </div>
 
