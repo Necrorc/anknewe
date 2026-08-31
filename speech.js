@@ -7,15 +7,18 @@
  * без реального аудио.
  */
 
+// Коды языков, поддерживаемых для озвучки/выбора в колодах.
+// Отображаемые названия берутся из i18n.js (ключи lang.<code>), не отсюда —
+// так они переводятся вместе с остальным интерфейсом.
 const SPEECH_LANGUAGES = [
-  { code: 'pl-PL', label: 'Польский' },
-  { code: 'en-US', label: 'Английский' },
-  { code: 'ru-RU', label: 'Русский' },
-  { code: 'de-DE', label: 'Немецкий' },
-  { code: 'fr-FR', label: 'Французский' },
-  { code: 'es-ES', label: 'Испанский' },
-  { code: 'it-IT', label: 'Итальянский' },
-  { code: 'uk-UA', label: 'Украинский' },
+  { code: 'pl-PL' },
+  { code: 'en-US' },
+  { code: 'ru-RU' },
+  { code: 'de-DE' },
+  { code: 'fr-FR' },
+  { code: 'es-ES' },
+  { code: 'it-IT' },
+  { code: 'uk-UA' },
 ];
 
 function buildPlayOrder(count, shuffle) {
@@ -44,6 +47,10 @@ function prevPosition(pos, total, repeat) {
  * CardSpeaker — проигрывает список карточек по очереди: слово -> пауза ->
  * перевод -> пауза -> следующая карточка. Использует глобальный
  * `speechSynthesis`, чтобы его можно было подменить в тестах.
+ *
+ * Внутри карточки хранятся по id (Map + массив id в порядке воспроизведения),
+ * а не по индексам массива — это позволяет безопасно удалять и редактировать
+ * текущую карточку прямо во время сессии, не ломая воспроизведение.
  */
 class CardSpeaker {
   constructor(synth = (typeof speechSynthesis !== 'undefined' ? speechSynthesis : null)) {
@@ -53,16 +60,18 @@ class CardSpeaker {
     this.gapMs = 350;         // пауза между словом и переводом
     this.nextGapMs = 700;     // пауза перед следующей карточкой
 
-    this._cards = [];
-    this._order = [];
+    this._cardMap = new Map(); // id -> card
+    this._order = [];          // массив id в порядке воспроизведения
     this._pos = 0;
     this._playing = false;
     this._repeat = false;
   }
 
   load(cards, { shuffle = false, repeat = false } = {}) {
-    this._cards = cards;
-    this._order = buildPlayOrder(cards.length, shuffle);
+    this._cardMap = new Map(cards.map((c) => [c.id, c]));
+    const ids = cards.map((c) => c.id);
+    const orderIdx = buildPlayOrder(ids.length, shuffle);
+    this._order = orderIdx.map((i) => ids[i]);
     this._pos = 0;
     this._repeat = repeat;
     this._playing = false;
@@ -70,7 +79,7 @@ class CardSpeaker {
 
   get total() { return this._order.length; }
   get position() { return this._pos; }
-  get currentCard() { return this._cards[this._order[this._pos]]; }
+  get currentCard() { return this._cardMap.get(this._order[this._pos]); }
   get isPlaying() { return this._playing; }
 
   play(wordLang, translationLang) {
@@ -100,6 +109,26 @@ class CardSpeaker {
     this._pos = pp;
     if (this._playing) this._speakFrom(this._pos, wordLang, translationLang);
     else if (this.onCardStart) this.onCardStart(this._pos, this.currentCard);
+  }
+
+  /**
+   * Убирает карточку с данным id из сессии (например, после удаления из базы).
+   * Возвращает true, если это была текущая (озвучиваемая/показанная) карточка —
+   * в этом случае вызывающий код должен сам продолжить воспроизведение/показ
+   * следующей карточки (play/prev/next или обновить дисплей вручную).
+   */
+  removeCard(id) {
+    const wasCurrent = this._order[this._pos] === id;
+    this._cardMap.delete(id);
+    this._order = this._order.filter((x) => x !== id);
+    if (this._pos >= this._order.length) this._pos = Math.max(0, this._order.length - 1);
+    return wasCurrent;
+  }
+
+  /** Обновляет данные карточки с данным id (например, после редактирования). */
+  updateCardData(id, patch) {
+    const card = this._cardMap.get(id);
+    if (card) Object.assign(card, patch);
   }
 
   _speakFrom(pos, wordLang, translationLang) {

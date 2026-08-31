@@ -15,7 +15,17 @@ let _dbPromise = null;
 function openDB() {
   if (_dbPromise) return _dbPromise;
   _dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    if (typeof indexedDB === 'undefined' || !indexedDB) {
+      reject(new Error('IndexedDB is not available in this browser'));
+      return;
+    }
+    let req;
+    try {
+      req = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (err) {
+      reject(err);
+      return;
+    }
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains('decks')) {
@@ -30,8 +40,11 @@ function openDB() {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error || new Error('Failed to open IndexedDB'));
+    req.onblocked = () => reject(new Error('IndexedDB open blocked (another tab may be using an older version)'));
   });
+  // Если открытие не удалось — не кэшируем неудачу навсегда, следующий вызов попробует снова
+  _dbPromise.catch(() => { _dbPromise = null; });
   return _dbPromise;
 }
 
@@ -48,6 +61,11 @@ function reqToPromise(req) {
 
 const now = () => new Date().toISOString();
 
+// Палитра цветов колод — назначается один раз при создании и хранится в записи
+// колоды, а не вычисляется по индексу в списке (иначе цвет "прыгал" бы при
+// удалении/пересортировке других колод).
+const DECK_COLOR_PALETTE = ['#C9974A', '#4F7A63', '#B5493C', '#5C7DA6', '#8A6FAE', '#B08A3E'];
+
 /* ---------------------------------------------------------------------- *
  * Колоды
  * ---------------------------------------------------------------------- */
@@ -57,7 +75,7 @@ async function getAllDecks() {
   const decks = await reqToPromise(t.objectStore('decks').getAll());
   decks.sort((a, b) => a.id - b.id);
   const withCounts = await Promise.all(
-    decks.map(async (d) => ({ ...withLangDefaults(d), cardCount: await countCardsInDeck(d.id) }))
+    decks.map(async (d) => ({ ...withDeckDefaults(d), cardCount: await countCardsInDeck(d.id) }))
   );
   return withCounts;
 }
@@ -78,18 +96,31 @@ function withLangDefaults(deck) {
   };
 }
 
+/** Добавляет язык по умолчанию и стабильный цвет (по id, не по позиции в списке)
+ * для колод, созданных до появления этих полей. */
+function withDeckDefaults(deck) {
+  const withLang = withLangDefaults(deck);
+  if (!withLang) return withLang;
+  if (withLang.color) return withLang;
+  return { ...withLang, color: DECK_COLOR_PALETTE[withLang.id % DECK_COLOR_PALETTE.length] };
+}
+
 async function getDeck(id) {
   const t = await tx('decks', 'readonly');
   const deck = await reqToPromise(t.objectStore('decks').get(id));
-  return withLangDefaults(deck);
+  return withDeckDefaults(deck);
 }
 
 async function createDeck(name, opts = {}) {
   const t = await tx('decks', 'readwrite');
-  const id = await reqToPromise(t.objectStore('decks').add({
+  const store = t.objectStore('decks');
+  const existingCount = await reqToPromise(store.count());
+  const color = DECK_COLOR_PALETTE[existingCount % DECK_COLOR_PALETTE.length];
+  const id = await reqToPromise(store.add({
     name: name.trim().slice(0, 60),
     wordLang: opts.wordLang || 'pl-PL',
     translationLang: opts.translationLang || 'ru-RU',
+    color,
     createdAt: now(),
   }));
   return id;
@@ -222,6 +253,24 @@ async function deleteCard(id) {
   const t = await tx('cards', 'readwrite');
   t.objectStore('cards').delete(id);
   await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+}
+
+/**
+ * Восстанавливает ранее удалённую карточку с теми же данными (используется
+ * для отмены удаления — "Undo" в тосте). Получает новый id, но сохраняет
+ * слово/перевод/колоду/уровень/дату следующего повторения.
+ */
+async function restoreCard(cardData) {
+  const t = await tx('cards', 'readwrite');
+  const id = await reqToPromise(t.objectStore('cards').add({
+    deckId: cardData.deckId,
+    word: cardData.word,
+    translation: cardData.translation,
+    box: cardData.box,
+    nextReview: cardData.nextReview,
+    createdAt: cardData.createdAt || now(),
+  }));
+  return id;
 }
 
 /**

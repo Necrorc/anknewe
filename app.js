@@ -6,6 +6,7 @@
 const state = {
   activeDeckId: null,
   editingDeckId: null,   // null = создаём новую колоду, id = редактируем существующую
+  currentView: 'decks',
   learn: {
     queue: [],           // очередь id карточек в текущей сессии
     directions: {},       // id -> 'wt' | 'tw'
@@ -13,6 +14,7 @@ const state = {
     current: null,        // карточка, которая сейчас показана
     revealed: false,
     hasRevealedOnce: false, // была ли карточка хоть раз перевёрнута в этом показе (для печатей знал/не знал)
+    sessionActive: false,   // сессия идёт — не сбрасывать на экран выбора направления при возврате на вкладку
   },
   listen: {
     speaker: null,        // экземпляр CardSpeaker
@@ -23,6 +25,7 @@ const state = {
   settings: {
     confirmDeleteCard: true,      // спрашивать подтверждение перед удалением карточки
     deleteButtonPosition: 'top',  // 'top' | 'stamps' — где показывать 🗑 в режиме "Учить"
+    appLanguage: 'ru',            // 'ru' | 'en' | 'pl'
   },
 };
 
@@ -34,34 +37,94 @@ function $(sel) { return document.querySelector(sel); }
 function $all(sel) { return Array.from(document.querySelectorAll(sel)); }
 
 function showView(name) {
+  state.currentView = name;
   $all('.view').forEach((v) => v.classList.toggle('is-active', v.dataset.view === name));
   $all('.tab-btn').forEach((b) => b.classList.toggle('is-active', b.dataset.target === name));
   if (name === 'decks') renderDecks();
   if (name === 'cards') renderCards();
   if (name === 'learn') renderLearnSetup();
   if (name === 'listen') renderListenSetup();
-  if (name === 'stats') renderStats();
-  if (name === 'settings') renderSettingsView();
+  if (name === 'more') { renderStats(); renderSettingsView(); }
 }
 
 let toastTimer = null;
-function toast(msg) {
+
+/**
+ * Показывает тост. По умолчанию 2200мс; передай `duration` длиннее для сообщений
+ * с числами (их нужно успеть прочитать), или `undoLabel`+`onUndo` — тогда в тосте
+ * появится кнопка отмены действия (например, восстановление удалённой карточки),
+ * и он покажется на более долгий срок автоматически (если duration не задан явно).
+ */
+function toast(msg, { duration, undoLabel, onUndo } = {}) {
   const el = $('#toast');
-  el.textContent = msg;
-  el.classList.add('is-visible');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('is-visible'), 2200);
+  el.innerHTML = '';
+
+  const text = document.createElement('span');
+  text.textContent = msg;
+  el.appendChild(text);
+
+  if (undoLabel && onUndo) {
+    const btn = document.createElement('button');
+    btn.className = 'toast-undo-btn';
+    btn.textContent = undoLabel;
+    btn.addEventListener('click', () => {
+      clearTimeout(toastTimer);
+      el.classList.remove('is-visible');
+      onUndo();
+    });
+    el.appendChild(btn);
+  }
+
+  el.classList.add('is-visible');
+  const finalDuration = duration || (undoLabel ? 6500 : 2200);
+  toastTimer = setTimeout(() => el.classList.remove('is-visible'), finalDuration);
+}
+
+let lastFocusedBeforeModal = null;
+
+function getFocusableIn(container) {
+  return Array.from(
+    container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+  ).filter((el) => !el.disabled && el.offsetParent !== null);
 }
 
 function openModal(id) {
+  lastFocusedBeforeModal = document.activeElement;
   $('#modal-backdrop').hidden = false;
   $all('.modal').forEach((m) => (m.hidden = m.id !== id));
+  const modalEl = document.getElementById(id);
+  // фокус на первый интерактивный элемент модалки (или на неё саму, если таких нет)
+  setTimeout(() => {
+    const focusables = getFocusableIn(modalEl);
+    (focusables[0] || modalEl).focus();
+  }, 0);
 }
 function closeModal() {
   $('#modal-backdrop').hidden = true;
   state.pendingConfirm = null;
   state.editingDeckId = null;
+  // возвращаем фокус туда, откуда открыли модалку — важно для клавиатурной навигации
+  if (lastFocusedBeforeModal && document.body.contains(lastFocusedBeforeModal)) {
+    lastFocusedBeforeModal.focus();
+  }
+  lastFocusedBeforeModal = null;
 }
+
+// Escape закрывает открытую модалку; Tab/Shift+Tab не даёт фокусу уйти за её пределы
+document.addEventListener('keydown', (e) => {
+  if ($('#modal-backdrop').hidden) return;
+  if (e.key === 'Escape') { closeModal(); return; }
+  if (e.key !== 'Tab') return;
+
+  const visibleModal = $all('.modal').find((m) => !m.hidden);
+  if (!visibleModal) return;
+  const focusables = getFocusableIn(visibleModal);
+  if (focusables.length === 0) return;
+  const first = focusables[0], last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 
 function askConfirm(title, text, actionLabel, onConfirm) {
   $('#confirm-title').textContent = title;
@@ -75,32 +138,47 @@ function askConfirm(title, text, actionLabel, onConfirm) {
  * Колоды
  * ---------------------------------------------------------------------- */
 
+/** Останавливает активные сессии "Учить"/"Слушать" — вызывается при смене активной колоды,
+ * чтобы не возникало рассинхрона "активная колода ≠ то, что сейчас играет/показывается". */
+function stopActiveSessions() {
+  if (state.listen.speaker) {
+    state.listen.speaker.pause();
+  }
+  state.listen.sessionActive = false;
+  state.listen.speaker = null;
+  state.listen.deck = null;
+
+  state.learn.sessionActive = false;
+  state.learn.queue = [];
+  state.learn.current = null;
+}
+
 async function renderDecks() {
   const decks = await getAllDecks();
   const activeId = await ensureActiveDeck();
   state.activeDeckId = activeId;
 
-  const palette = ['#C9974A', '#4F7A63', '#B5493C', '#5C7DA6', '#8A6FAE', '#B08A3E'];
   const list = $('#deck-list');
   list.innerHTML = '';
 
   decks.forEach((d, i) => {
     const row = document.createElement('div');
     row.className = 'deck-row' + (d.id === activeId ? ' is-active' : '');
-    row.style.setProperty('--deck-color', palette[i % palette.length]);
-    const wordLangLabel = (SPEECH_LANGUAGES.find((l) => l.code === d.wordLang) || {}).label || d.wordLang;
-    const trLangLabel = (SPEECH_LANGUAGES.find((l) => l.code === d.translationLang) || {}).label || d.translationLang;
+    row.style.setProperty('--deck-color', d.color);
+    const wordLangLabel = t('lang.' + d.wordLang) || d.wordLang;
+    const trLangLabel = t('lang.' + d.translationLang) || d.translationLang;
     row.innerHTML = `
       <div class="deck-main">
         <div class="deck-name">${d.id === activeId ? '<span class="star">★</span>' : ''}${escapeHtml(d.name)}</div>
-        <div class="deck-count">${d.cardCount} карточек · ${escapeHtml(wordLangLabel)} → ${escapeHtml(trLangLabel)}</div>
+        <div class="deck-count">${escapeHtml(t('decks.rowInfo', { count: d.cardCount, wordLang: wordLangLabel, trLang: trLangLabel }))}</div>
       </div>
       <button class="deck-edit" data-id="${d.id}">✏️</button>
       <button class="deck-del" data-id="${d.id}" data-name="${escapeHtml(d.name)}">🗑</button>
     `;
     row.querySelector('.deck-main').addEventListener('click', async () => {
+      stopActiveSessions();
       await setActiveDeck(d.id);
-      toast(`Активная колода: «${d.name}»`);
+      toast(t('decks.activeToast', { name: d.name }));
       renderDecks();
     });
     row.querySelector('.deck-edit').addEventListener('click', (e) => {
@@ -110,31 +188,43 @@ async function renderDecks() {
     row.querySelector('.deck-del').addEventListener('click', (e) => {
       e.stopPropagation();
       askConfirm(
-        'Удалить колоду?',
-        `Колода «${d.name}» и все ${d.cardCount} карточек в ней будут удалены безвозвратно.`,
-        'Удалить',
+        t('decks.deleteConfirmTitle'),
+        t('decks.deleteConfirmText', { name: d.name, count: d.cardCount }),
+        t('common.delete'),
         async () => {
+          stopActiveSessions();
           await deleteDeck(d.id);
           await ensureActiveDeck();
-          toast(`Колода «${d.name}» удалена`);
+          toast(t('decks.deletedToast', { name: d.name }));
           renderDecks();
         }
       );
     });
     list.appendChild(row);
   });
+
+  const activeDeck = decks.find((d) => d.id === activeId);
+  const hint = $('#decks-onboarding-hint');
+  if (activeDeck && activeDeck.cardCount === 0) {
+    hint.textContent = t('decks.onboardingHint');
+    hint.hidden = false;
+  } else {
+    hint.hidden = true;
+  }
+
+  $('#btn-merge-decks').disabled = decks.length < 2;
 }
 
 function fillLangSelect(selectEl, selectedCode) {
   selectEl.innerHTML = SPEECH_LANGUAGES.map(
-    (l) => `<option value="${l.code}"${l.code === selectedCode ? ' selected' : ''}>${l.label}</option>`
+    (l) => `<option value="${l.code}"${l.code === selectedCode ? ' selected' : ''}>${escapeHtml(t('lang.' + l.code))}</option>`
   ).join('');
 }
 
 function openDeckModal(deck /* undefined = создание новой */) {
   state.editingDeckId = deck ? deck.id : null;
-  $('#deck-modal-title').textContent = deck ? 'Изменить колоду' : 'Новая колода';
-  $('#confirm-new-deck').textContent = deck ? 'Сохранить' : 'Создать';
+  $('#deck-modal-title').textContent = deck ? t('deckModal.titleEdit') : t('deckModal.titleNew');
+  $('#confirm-new-deck').textContent = deck ? t('deckModal.saveBtn') : t('deckModal.createBtn');
   $('#input-new-deck-name').value = deck ? deck.name : '';
   fillLangSelect($('#select-word-lang'), deck ? deck.wordLang : 'pl-PL');
   fillLangSelect($('#select-translation-lang'), deck ? deck.translationLang : 'ru-RU');
@@ -148,17 +238,18 @@ $('#confirm-new-deck').addEventListener('click', async () => {
   const name = $('#input-new-deck-name').value.trim();
   const wordLang = $('#select-word-lang').value;
   const translationLang = $('#select-translation-lang').value;
-  if (!name) { toast('Название не может быть пустым'); return; }
+  if (!name) { toast(t('deckModal.nameEmptyToast')); return; }
 
   if (state.editingDeckId) {
     await updateDeck(state.editingDeckId, { name, wordLang, translationLang });
     closeModal();
-    toast(`Колода «${name}» обновлена`);
+    toast(t('deckModal.updatedToast', { name }));
   } else {
     const id = await createDeck(name, { wordLang, translationLang });
+    stopActiveSessions();
     await setActiveDeck(id);
     closeModal();
-    toast(`Колода «${name}» создана`);
+    toast(t('deckModal.createdToast', { name }));
   }
   state.editingDeckId = null;
   renderDecks();
@@ -167,16 +258,16 @@ $('#confirm-new-deck').addEventListener('click', async () => {
 /* --- Объединение колод ------------------------------------------------------ */
 
 function langLabel(code) {
-  return (SPEECH_LANGUAGES.find((l) => l.code === code) || {}).label || code;
+  return t('lang.' + code) || code;
 }
 
 function deckOptionLabel(d) {
-  return `${d.name} (${langLabel(d.wordLang)} → ${langLabel(d.translationLang)}, ${d.cardCount})`;
+  return t('merge.optionLabel', { name: d.name, wordLang: langLabel(d.wordLang), trLang: langLabel(d.translationLang), count: d.cardCount });
 }
 
 $('#btn-merge-decks').addEventListener('click', async () => {
   const decks = await getAllDecks();
-  if (decks.length < 2) { toast('Нужно минимум 2 колоды, чтобы объединять'); return; }
+  if (decks.length < 2) { toast(t('decks.needTwoDecksToast')); return; }
 
   const fill = (selectEl, defaultIndex) => {
     selectEl.innerHTML = decks.map((d, i) =>
@@ -193,26 +284,26 @@ $('#confirm-merge-decks').addEventListener('click', async () => {
   const sourceId = Number($('#select-merge-source').value);
   const targetId = Number($('#select-merge-target').value);
 
-  if (sourceId === targetId) { toast('Выбери две разные колоды'); return; }
+  if (sourceId === targetId) { toast(t('merge.sameDeckToast')); return; }
 
   const source = await getDeck(sourceId);
   const target = await getDeck(targetId);
 
   if (source.wordLang !== target.wordLang || source.translationLang !== target.translationLang) {
-    toast('У этих колод разные языки — объединять нельзя');
+    toast(t('merge.diffLangToast'));
     return;
   }
 
   closeModal();
   askConfirm(
-    'Объединить колоды?',
-    `Все карточки из «${source.name}» переедут в «${target.name}» (дубли пропустятся), `
-    + `а колода «${source.name}» будет удалена. Это необратимо.`,
-    'Объединить',
+    t('merge.confirmTitle'),
+    t('merge.confirmText', { source: source.name, target: target.name }),
+    t('merge.confirmBtn'),
     async () => {
+      stopActiveSessions();
       const { moved, skipped } = await mergeDecks(sourceId, targetId);
       await ensureActiveDeck();
-      toast(`Готово! Перенесено: ${moved}${skipped ? `, пропущено дублей: ${skipped}` : ''}`);
+      toast(t('merge.doneToast', { moved }) + (skipped ? t('merge.doneSkippedSuffix', { skipped }) : ''), { duration: 3800 });
       renderDecks();
     }
   );
@@ -228,13 +319,13 @@ async function renderCards() {
   const cards = await getCardsByDeck(deckId);
 
   $('#cards-deck-name').textContent = deck.name;
-  $('#cards-count-sub').textContent = `${cards.length} карточек`;
+  $('#cards-count-sub').textContent = t('cards.countLabel', { count: cards.length });
 
   const list = $('#entry-list');
   list.innerHTML = '';
 
   if (cards.length === 0) {
-    list.innerHTML = `<div class="empty-hint">В этой колоде пока нет карточек.<br>Добавь первую или импортируй файл.</div>`;
+    list.innerHTML = `<div class="empty-hint">${t('cards.emptyHint')}</div>`;
     return;
   }
 
@@ -246,16 +337,24 @@ async function renderCards() {
       <span class="entry-word">${escapeHtml(c.word)}</span>
       <span class="entry-arrow">→</span>
       <span class="entry-translation">${escapeHtml(c.translation)}</span>
-      <span class="entry-box">ур.${c.box}</span>
+      <span class="entry-box">${escapeHtml(t('cards.levelLabel', { n: c.box }))}</span>
       <button class="entry-edit" data-id="${c.id}">✏️</button>
       <button class="entry-del" data-id="${c.id}">✕</button>
     `;
     row.querySelector('.entry-edit').addEventListener('click', () => openEditCardModal(c));
     row.querySelector('.entry-del').addEventListener('click', () => {
-      askConfirm('Удалить карточку?', `«${c.word}» → «${c.translation}»`, 'Удалить', async () => {
+      askConfirm(t('cards.deleteConfirmTitle'), `«${c.word}» → «${c.translation}»`, t('common.delete'), async () => {
+        const cardSnapshot = { deckId: c.deckId, word: c.word, translation: c.translation, box: c.box, nextReview: c.nextReview, createdAt: c.createdAt };
         await deleteCard(c.id);
-        toast('Карточка удалена');
         renderCards();
+        toast(t('cards.deletedToast'), {
+          undoLabel: t('common.undo'),
+          onUndo: async () => {
+            await restoreCard(cardSnapshot);
+            toast(t('common.restoredToast'));
+            renderCards();
+          },
+        });
       });
     });
     list.appendChild(row);
@@ -277,17 +376,19 @@ function openEditCardModal(card, onSaved) {
 $('#confirm-edit-card').addEventListener('click', async () => {
   const word = $('#input-edit-card-word').value.trim();
   const translation = $('#input-edit-card-translation').value.trim();
-  if (!word || !translation) { toast('Заполни оба поля'); return; }
+  if (!word || !translation) { toast(t('cards.fillBothToast')); return; }
 
   const ok = await updateCard(editingCardId, word, translation);
   closeModal();
   if (ok) {
-    toast('Карточка обновлена');
+    toast(t('cards.updatedToast'));
     if (editCardSavedCallback) await editCardSavedCallback();
   } else {
-    toast('Такая пара слово/перевод уже есть в колоде — не стал дублировать');
+    toast(t('cards.duplicateToast'));
   }
 });
+
+$('#btn-cards-overflow').addEventListener('click', () => openModal('modal-cards-overflow'));
 
 $('#btn-add-card').addEventListener('click', () => {
   $('#input-card-word').value = '';
@@ -299,39 +400,39 @@ $('#btn-add-card').addEventListener('click', () => {
 $('#confirm-add-card').addEventListener('click', async () => {
   const word = $('#input-card-word').value.trim();
   const translation = $('#input-card-translation').value.trim();
-  if (!word || !translation) { toast('Заполни оба поля'); return; }
+  if (!word || !translation) { toast(t('cards.fillBothToast')); return; }
   const deckId = await ensureActiveDeck();
   const added = await addCard(deckId, word, translation);
   closeModal();
-  toast(added ? 'Карточка добавлена' : 'Такая карточка уже есть — пропущено');
+  toast(added ? t('cards.addedToast') : t('cards.alreadyExistsToast'));
   renderCards();
 });
 
 $('#btn-dedup').addEventListener('click', async () => {
+  closeModal();
   const deckId = await ensureActiveDeck();
   const removed = await dedupDeck(deckId);
-  toast(removed ? `Удалено дублей: ${removed}` : 'Дублей не найдено');
+  toast(removed ? t('cards.dedupRemovedToast', { n: removed }) : t('cards.dedupNoneToast'), { duration: removed ? 3800 : 2200 });
   renderCards();
 });
 
 $('#btn-reset-levels').addEventListener('click', async () => {
   const deckId = await ensureActiveDeck();
   const { total } = await countCards(deckId);
-  if (total === 0) { toast('В колоде нет карточек'); return; }
+  if (total === 0) { toast(t('cards.noCardsToast')); return; }
   openModal('modal-reset-levels');
 });
 
 function confirmResetLevels(targetBox) {
   closeModal();
   askConfirm(
-    'Сбросить уровни карточек?',
-    `У всех карточек активной колоды уровень станет ${targetBox}, и все они сразу станут `
-    + 'доступны к повторению. Карточки не удаляются — сбрасывается только прогресс.',
-    'Сбросить',
+    t('resetModal.confirmTitle'),
+    t('resetModal.confirmText', { target: targetBox }),
+    t('resetModal.confirmBtn'),
     async () => {
       const deckId = await ensureActiveDeck();
       const n = await resetDeckLevels(deckId, targetBox);
-      toast(`Уровень сброшен до ${targetBox} у ${n} карточек`);
+      toast(t('resetModal.doneToast', { target: targetBox, n }), { duration: 3800 });
       renderCards();
     }
   );
@@ -344,14 +445,14 @@ $('#btn-delete-all').addEventListener('click', async () => {
   const deckId = await ensureActiveDeck();
   const deck = await getDeck(deckId);
   const { total } = await countCards(deckId);
-  if (total === 0) { toast('В колоде и так нет карточек'); return; }
+  if (total === 0) { toast(t('cards.noCardsToast')); return; }
   askConfirm(
-    'Очистить колоду?',
-    `Все ${total} карточек в колоде «${deck.name}» будут удалены безвозвратно. Другие колоды это не затронет.`,
-    'Удалить всё',
+    t('cards.clearConfirmTitle'),
+    t('cards.clearConfirmText', { count: total, name: deck.name }),
+    t('cards.clearBtn'),
     async () => {
       const n = await deleteAllCardsInDeck(deckId);
-      toast(`Удалено карточек: ${n}`);
+      toast(t('cards.clearedToast', { n }), { duration: 3800 });
       renderCards();
     }
   );
@@ -377,16 +478,16 @@ $('#import-file-input').addEventListener('change', async (e) => {
       pairs = (trimmed.startsWith('{') || trimmed.startsWith('[')) ? parseJsonPairs(text) : parseCsvPairs(text);
     }
   } catch (err) {
-    toast('Не получилось разобрать файл: ' + err.message);
+    toast(t('import.parseErrorToast', { error: err.message }));
     return;
   }
   if (pairs.length === 0) {
-    toast('В файле не нашлось пар слово/перевод');
+    toast(t('import.noPairsToast'));
     return;
   }
   const deckId = await ensureActiveDeck();
   const { added, skipped } = await addCardsBulk(deckId, pairs);
-  toast(`Добавлено: ${added}${skipped ? `, пропущено дублей: ${skipped}` : ''}`);
+  toast(t('import.addedToast', { added }) + (skipped ? t('import.skippedSuffix', { skipped }) : ''), { duration: 3800 });
   renderCards();
 });
 
@@ -415,7 +516,7 @@ function csvEscape(s) {
 $('#btn-export-cards').addEventListener('click', async () => {
   const deckId = await ensureActiveDeck();
   const { total } = await countCards(deckId);
-  if (total === 0) { toast('В колоде нет карточек для экспорта'); return; }
+  if (total === 0) { toast(t('cards.noCardsForExportToast')); return; }
   openModal('modal-export');
 });
 
@@ -426,7 +527,7 @@ $('#export-as-json').addEventListener('click', async () => {
   const data = cards.map((c) => ({ word: c.word, translation: c.translation }));
   downloadFile(`${sanitizeFilename(deck.name)}.json`, JSON.stringify(data, null, 2), 'application/json');
   closeModal();
-  toast(`Скачано: ${cards.length} карточек`);
+  toast(t('export.downloadedToast', { n: cards.length }), { duration: 3800 });
 });
 
 $('#export-as-csv').addEventListener('click', async () => {
@@ -434,21 +535,25 @@ $('#export-as-csv').addEventListener('click', async () => {
   const deck = await getDeck(deckId);
   const cards = await getCardsByDeck(deckId);
   const lines = ['word,translation', ...cards.map((c) => `${csvEscape(c.word)},${csvEscape(c.translation)}`)];
-  downloadFile(`${sanitizeFilename(deck.name)}.csv`, lines.join('\n'), 'text/csv');
+  // UTF-8 BOM + CRLF — иначе Excel по умолчанию ломает кириллицу и не всегда распознаёт переносы строк
+  const csvContent = '\uFEFF' + lines.join('\r\n');
+  downloadFile(`${sanitizeFilename(deck.name)}.csv`, csvContent, 'text/csv');
   closeModal();
-  toast(`Скачано: ${cards.length} карточек`);
+  toast(t('export.downloadedToast', { n: cards.length }), { duration: 3800 });
 });
 
 function parseCsvPairs(text) {
   const sample = text.slice(0, 200);
   const delim = (sample.match(/;/g) || []).length >= (sample.match(/,/g) || []).length ? ';' : ',';
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  let rows = lines.map((line) => splitCsvLine(line, delim));
+  let rows = parseCsvText(text, delim).filter((row) => row.some((cell) => cell.trim().length > 0));
 
   if (rows.length) {
     const header = rows[0].map((c) => c.trim().toLowerCase());
     const headerWords = ['word', 'слово', 'front', 'translation', 'перевод', 'back'];
-    if (header.length >= 2 && (headerWords.includes(header[0]) || headerWords.includes(header[1]))) {
+    // Пропускаем заголовок, только если ОБЕ первые ячейки — служебные слова
+    // (а не одна, иначе легко принять настоящую пару слово/перевод за заголовок,
+    // если слово случайно совпало с одним из этих названий колонок)
+    if (header.length >= 2 && headerWords.includes(header[0]) && headerWords.includes(header[1])) {
       rows = rows.slice(1);
     }
   }
@@ -462,24 +567,38 @@ function parseCsvPairs(text) {
   return pairs;
 }
 
-function splitCsvLine(line, delim) {
-  // простой разбор CSV-строки с поддержкой кавычек
-  const out = [];
-  let cur = '', inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+/**
+ * Полноценный разбор CSV-текста целиком (а не построчно) — так поля в кавычках
+ * могут содержать переносы строк, запятые/точки с запятой и экранированные
+ * кавычки (""), не ломая структуру таблицы.
+ */
+function parseCsvText(text, delim) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  let i = 0;
+  const len = text.length;
+
+  while (i < len) {
+    const ch = text[i];
+
     if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-      else if (ch === '"') { inQuotes = false; }
-      else cur += ch;
-    } else {
-      if (ch === '"') inQuotes = true;
-      else if (ch === delim) { out.push(cur); cur = ''; }
-      else cur += ch;
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += ch; i++; continue;
     }
+
+    if (ch === '"') { inQuotes = true; i++; continue; }
+    if (ch === delim) { row.push(field); field = ''; i++; continue; }
+    if (ch === '\r') { i++; continue; } // перевод строки распознаём по \n, \r просто пропускаем
+    if (ch === '\n') { row.push(field); field = ''; rows.push(row); row = []; i++; continue; }
+    field += ch; i++;
   }
-  out.push(cur);
-  return out;
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
 }
 
 function parseJsonPairs(text) {
@@ -508,6 +627,9 @@ function parseJsonPairs(text) {
  * ---------------------------------------------------------------------- */
 
 async function renderLearnSetup() {
+  // если сессия уже идёт (например, вернулись на вкладку) — не сбрасываем её на экран выбора направления
+  if (state.learn.sessionActive) return;
+
   const deckId = await ensureActiveDeck();
   const deck = await getDeck(deckId);
   const { due } = await countCards(deckId);
@@ -515,14 +637,13 @@ async function renderLearnSetup() {
   $('#learn-session').hidden = true;
   $('#learn-empty').hidden = true;
   $('#learn-setup').hidden = false;
-  $('#learn-deck-info').textContent = `Колода «${deck.name}» · к повторению: ${due}`;
+  $('#learn-deck-info').textContent = t('learn.deckInfo', { name: deck.name, due });
 
   $all('.btn-direction').forEach((b) => (b.onclick = () => startLearnSession(b.dataset.dir)));
 
   if (due === 0) {
     $('#learn-setup').hidden = true;
-    $('#learn-empty-text').textContent =
-      `В колоде «${deck.name}» сейчас нет карточек, которые пора повторить. 🎉\nДобавь новые или загляни позже.`;
+    $('#learn-empty-text').textContent = t('learn.noDueText', { name: deck.name });
     $('#btn-learn-again').hidden = true;
     $('#learn-empty').hidden = false;
   }
@@ -531,6 +652,7 @@ async function renderLearnSetup() {
 async function startLearnSession(mode) {
   const deckId = await ensureActiveDeck();
   const deck = await getDeck(deckId);
+  const { due: trueDueCount } = await countCards(deckId);
   const due = await getDueCards(deckId, 20);
   if (due.length === 0) { renderLearnSetup(); return; }
 
@@ -544,7 +666,9 @@ async function startLearnSession(mode) {
   state.learn.queue = ids;
   state.learn.directions = directions;
   state.learn.sessionTotal = ids.length;
+  state.learn.dueAtStart = trueDueCount; // может быть больше 20 — для сообщения "выучено N из M"
   state.learn.scoredCards = new Set(); // карточки, для которых уже учтена первая попытка
+  state.learn.sessionActive = true;
 
   $('#learn-setup').hidden = true;
   $('#learn-empty').hidden = true;
@@ -557,8 +681,11 @@ async function startLearnSession(mode) {
 async function showNextCard() {
   const { queue } = state.learn;
   if (queue.length === 0) {
+    state.learn.sessionActive = false;
     $('#learn-session').hidden = true;
-    $('#learn-empty-text').textContent = `Сессия повторения завершена!\nВыучено карточек: ${state.learn.sessionTotal} 👏`;
+    $('#learn-empty-text').textContent = state.learn.dueAtStart > 20
+      ? t('learn.sessionCompleteOf', { n: state.learn.sessionTotal, total: state.learn.dueAtStart })
+      : t('learn.sessionComplete', { n: state.learn.sessionTotal });
     $('#btn-learn-again').hidden = false;
     $('#learn-empty').hidden = false;
     return;
@@ -581,7 +708,7 @@ async function showNextCard() {
   state.learn.revealed = false;
   state.learn.hasRevealedOnce = false;
 
-  $('#session-progress').textContent = `осталось выучить: ${new Set(queue).size}`;
+  $('#session-progress').textContent = t('learn.progressLabel', { n: new Set(queue).size });
   renderCardFace();
 }
 
@@ -595,21 +722,28 @@ function renderCardFace() {
   $('#card-back-text').textContent = cur.back;
   $('#card-front-text').hidden = revealed;
   $('#card-back-text').hidden = !revealed;
-  $('#card-tap-hint').textContent = revealed
-    ? 'нажми ещё раз, чтобы снова увидеть слово'
-    : 'нажми, чтобы перевернуть';
+  $('#card-tap-hint').textContent = revealed ? t('learn.tapToFlipBack') : t('learn.tapToFlip');
   $('#card-tap-hint').hidden = false;
+  $('#flip-card').setAttribute('aria-label', t('learn.cardAriaLabel', { text: revealed ? cur.back : cur.front }));
   // Пока карточка не перевёрнута ни разу — печатей "знал/не знал" ещё не видно,
   // но дальше при перелистывании туда-обратно они остаются на месте
   $('#stamp-row').hidden = !state.learn.hasRevealedOnce;
   applyDeleteButtonPosition();
 }
 
-$('#flip-card').addEventListener('click', () => {
+function flipCurrentCard() {
   if (!state.learn.current) return;
   state.learn.revealed = !state.learn.revealed;
   if (state.learn.revealed) state.learn.hasRevealedOnce = true;
   renderCardFace();
+}
+
+$('#flip-card').addEventListener('click', flipCurrentCard);
+$('#flip-card').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+    e.preventDefault(); // чтобы пробел не прокручивал страницу
+    flipCurrentCard();
+  }
 });
 
 $('#card-speak-btn').addEventListener('click', (e) => {
@@ -639,7 +773,7 @@ async function answerCurrent(correct) {
     queue.shift();
     if (!correct) queue.push(cur.id); // не знал — вернём в конец очереди
   }
-  toast(correct ? '✓ Знал' : '✗ Повторим ещё раз в этой сессии');
+  toast(correct ? t('learn.answerKnowToast') : t('learn.answerDontKnowToast'));
   await showNextCard();
 }
 
@@ -650,6 +784,7 @@ $('#btn-learn-again').addEventListener('click', renderLearnSetup);
 async function deleteCurrentLearnCard() {
   const cur = state.learn.current;
   if (!cur) return;
+  const fullCard = await getCard(cur.id);
   await deleteCard(cur.id);
 
   const { queue } = state.learn;
@@ -657,7 +792,13 @@ async function deleteCurrentLearnCard() {
   // удалённая карточка никогда не будет "выучена" — не учитываем её в итоговом счёте сессии
   if (state.learn.sessionTotal > 0) state.learn.sessionTotal -= 1;
 
-  toast('Карточка удалена');
+  toast(t('learn.deletedToast'), {
+    undoLabel: t('common.undo'),
+    onUndo: async () => {
+      if (fullCard) await restoreCard(fullCard);
+      toast(t('common.restoredToast'));
+    },
+  });
   await showNextCard();
 }
 
@@ -671,9 +812,9 @@ function handleDeleteCardClick() {
   }
 
   askConfirm(
-    'Удалить карточку?',
-    `«${cur.front}» → «${cur.back}» будет удалена из колоды безвозвратно.`,
-    'Удалить',
+    t('cards.deleteConfirmTitle'),
+    t('learn.deleteConfirmText', { front: cur.front, back: cur.back }),
+    t('common.delete'),
     deleteCurrentLearnCard
   );
 }
@@ -729,20 +870,20 @@ async function renderListenSetup() {
   $('#listen-session').hidden = true;
   $('#listen-empty').hidden = true;
   $('#listen-setup').hidden = false;
-  $('#listen-deck-info').textContent = `Колода «${deck.name}» · карточек: ${cards.length}`;
+  $('#listen-deck-info').textContent = t('listen.deckInfo', { name: deck.name, count: cards.length });
 
   if (!SPEECH_SUPPORTED) {
     $('#listen-setup').hidden = true;
-    $('#listen-empty-text').textContent =
-      'Этот браузер не поддерживает озвучку речи (Web Speech API).\nВ Safari на iPhone это должно работать.';
+    $('#listen-empty-text').textContent = t('listen.notSupportedText');
+    $('#btn-listen-again').hidden = true;
     $('#listen-empty').hidden = false;
     return;
   }
 
   if (cards.length === 0) {
     $('#listen-setup').hidden = true;
-    $('#listen-empty-text').textContent =
-      `В колоде «${deck.name}» пока нет карточек.\nДобавь их на вкладке «Карточки».`;
+    $('#listen-empty-text').textContent = t('listen.noCardsText', { name: deck.name });
+    $('#btn-listen-again').hidden = true;
     $('#listen-empty').hidden = false;
   }
 }
@@ -765,7 +906,8 @@ $('#btn-start-listen').addEventListener('click', async () => {
   speaker.onFinished = () => {
     state.listen.sessionActive = false;
     $('#listen-session').hidden = true;
-    $('#listen-empty-text').textContent = `Прослушано карточек: ${speaker.total} 🔊`;
+    $('#listen-empty-text').textContent = t('listen.finishedText', { n: speaker.total });
+    $('#btn-listen-again').hidden = false;
     $('#listen-empty').hidden = false;
   };
 
@@ -782,6 +924,8 @@ $('#btn-start-listen').addEventListener('click', async () => {
 
   speaker.play(deck.wordLang, deck.translationLang);
 });
+
+$('#btn-listen-again').addEventListener('click', renderListenSetup);
 
 $('#btn-listen-playpause').addEventListener('click', () => {
   const speaker = state.listen.speaker;
@@ -817,6 +961,89 @@ $('#btn-listen-stop').addEventListener('click', () => {
   renderListenSetup();
 });
 
+$('#listen-edit-btn').addEventListener('click', async () => {
+  const speaker = state.listen.speaker;
+  if (!speaker) return;
+  const card = speaker.currentCard;
+  if (!card) return;
+
+  // Ставим на паузу сразу — иначе озвучка в фоне уйдёт на следующую карточку,
+  // пока открыто окно редактирования
+  const wasPlaying = speaker.isPlaying;
+  speaker.pause();
+  $('#btn-listen-playpause').textContent = '▶';
+
+  const fresh = await getCard(card.id);
+  if (!fresh) return;
+
+  openEditCardModal(fresh, async () => {
+    const updated = await getCard(card.id);
+    if (!updated) return;
+    speaker.updateCardData(card.id, { word: updated.word, translation: updated.translation });
+    $('#listen-word-text').textContent = updated.word;
+    $('#listen-translation-text').textContent = updated.translation;
+
+    if (wasPlaying) {
+      const deck = state.listen.deck;
+      speaker.play(deck.wordLang, deck.translationLang);
+      $('#btn-listen-playpause').textContent = '⏸';
+    }
+  });
+});
+
+$('#listen-delete-btn').addEventListener('click', () => {
+  const speaker = state.listen.speaker;
+  if (!speaker) return;
+  const card = speaker.currentCard;
+  if (!card) return;
+
+  // Ставим на паузу сразу — иначе озвучка в фоне уйдёт на следующую карточку,
+  // пока открыто окно подтверждения
+  const wasPlaying = speaker.isPlaying;
+  speaker.pause();
+  $('#btn-listen-playpause').textContent = '▶';
+
+  const doDelete = async () => {
+    const deck = state.listen.deck;
+    const cardSnapshot = { deckId: card.deckId, word: card.word, translation: card.translation, box: card.box, nextReview: card.nextReview, createdAt: card.createdAt };
+    await deleteCard(card.id);
+    const wasCurrent = speaker.removeCard(card.id);
+    toast(t('listen.deletedToast'), {
+      undoLabel: t('common.undo'),
+      onUndo: async () => {
+        await restoreCard(cardSnapshot);
+        toast(t('common.restoredToast'));
+      },
+    });
+
+    if (speaker.total === 0) {
+      state.listen.sessionActive = false;
+      $('#listen-session').hidden = true;
+      $('#listen-empty-text').textContent = t('listen.emptyAfterDeleteText');
+      $('#btn-listen-again').hidden = true;
+      $('#listen-empty').hidden = false;
+      return;
+    }
+
+    if (wasCurrent && !wasPlaying) {
+      const c = speaker.currentCard;
+      $('#listen-progress').textContent = `${speaker.position + 1} / ${speaker.total}`;
+      $('#listen-word-text').textContent = c.word;
+      $('#listen-translation-text').textContent = c.translation;
+    }
+    if (wasPlaying) {
+      speaker.play(deck.wordLang, deck.translationLang);
+      $('#btn-listen-playpause').textContent = '⏸';
+    }
+  };
+
+  if (!state.settings.confirmDeleteCard) {
+    doDelete();
+    return;
+  }
+  askConfirm(t('cards.deleteConfirmTitle'), t('listen.deleteConfirmText', { word: card.word, translation: card.translation }), t('common.delete'), doDelete);
+});
+
 /* ---------------------------------------------------------------------- *
  * Статистика
  * ---------------------------------------------------------------------- */
@@ -826,10 +1053,10 @@ async function renderStats() {
   const deck = await getDeck(deckId);
   const { total, due } = await countCards(deckId);
 
-  $('#stats-deck-name').textContent = `Колода «${deck.name}»`;
+  $('#stats-deck-name').textContent = t('stats.deckName', { name: deck.name });
   $('#stat-grid').innerHTML = `
-    <div class="stat-row"><span class="stat-label">Всего карточек</span><span class="stat-value">${total}</span></div>
-    <div class="stat-row"><span class="stat-label">Готово к повторению</span><span class="stat-value">${due}</span></div>
+    <div class="stat-row"><span class="stat-label">${escapeHtml(t('stats.totalLabel'))}</span><span class="stat-value">${total}</span></div>
+    <div class="stat-row"><span class="stat-label">${escapeHtml(t('stats.dueLabel'))}</span><span class="stat-value">${due}</span></div>
   `;
 }
 
@@ -840,14 +1067,20 @@ async function renderStats() {
 async function loadSettings() {
   const confirmDelete = await getSetting('confirmDeleteCard');
   const delPos = await getSetting('deleteButtonPosition');
+  const appLang = await getSetting('appLanguage');
   state.settings.confirmDeleteCard = confirmDelete === null ? true : !!confirmDelete;
   state.settings.deleteButtonPosition = delPos === null ? 'top' : delPos;
+  state.settings.appLanguage = appLang === null ? 'ru' : appLang;
+  setLang(state.settings.appLanguage);
 }
 
 function renderSettingsView() {
   $('#setting-confirm-delete').checked = state.settings.confirmDeleteCard;
   $('#setting-delpos-top').checked = state.settings.deleteButtonPosition === 'top';
   $('#setting-delpos-stamps').checked = state.settings.deleteButtonPosition === 'stamps';
+  $('#setting-lang-ru').checked = state.settings.appLanguage === 'ru';
+  $('#setting-lang-en').checked = state.settings.appLanguage === 'en';
+  $('#setting-lang-pl').checked = state.settings.appLanguage === 'pl';
 }
 
 /** Показывает верхние/нижние кнопки удаления и редактирования согласно настройке и состоянию карточки. */
@@ -877,6 +1110,19 @@ $('#setting-delpos-stamps').addEventListener('change', async () => {
   applyDeleteButtonPosition();
 });
 
+async function changeAppLanguage(lang) {
+  state.settings.appLanguage = lang;
+  setLang(lang);
+  await setSetting('appLanguage', lang);
+  applyStaticTranslations();
+  // перерисовываем текущий экран, чтобы динамический текст тоже обновился сразу
+  showView(state.currentView || 'settings');
+}
+
+$('#setting-lang-ru').addEventListener('change', () => changeAppLanguage('ru'));
+$('#setting-lang-en').addEventListener('change', () => changeAppLanguage('en'));
+$('#setting-lang-pl').addEventListener('change', () => changeAppLanguage('pl'));
+
 /* ---------------------------------------------------------------------- *
  * Общая инициализация
  * ---------------------------------------------------------------------- */
@@ -891,18 +1137,49 @@ $all('[data-close]').forEach((btn) => btn.addEventListener('click', closeModal))
 $('#modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
 
 $('#confirm-action-btn').addEventListener('click', async () => {
+  const btn = $('#confirm-action-btn');
+  if (btn.disabled) return; // защита от повторного клика, пока выполняется действие
+  btn.disabled = true;
   const fn = state.pendingConfirm;
-  closeModal();
-  if (fn) await fn();
+  try {
+    closeModal();
+    if (fn) await fn();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
-window.addEventListener('DOMContentLoaded', async () => {
-  await ensureActiveDeck();
-  await loadSettings();
+async function initApp() {
+  try {
+    await ensureActiveDeck();
+    await loadSettings();  // внутри уже вызывает setLang() с сохранённым языком
+  } catch (err) {
+    console.error('Storage init failed:', err);
+    showStorageError();
+    return;
+  }
+  applyStaticTranslations();
   applyDeleteButtonPosition();
   showView('decks');
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js').catch(() => {});
   }
+}
+
+function showStorageError() {
+  // язык мог не успеть загрузиться — используем язык браузера как лучшее приближение
+  const browserLang = (navigator.language || 'ru').slice(0, 2);
+  setLang(['ru', 'en', 'pl'].includes(browserLang) ? browserLang : 'ru');
+  applyStaticTranslations();
+  $('#app').hidden = true;
+  $('#storage-error-screen').hidden = false;
+}
+
+$('#storage-error-retry').addEventListener('click', () => {
+  $('#storage-error-screen').hidden = true;
+  $('#app').hidden = false;
+  initApp();
 });
+
+window.addEventListener('DOMContentLoaded', initApp);

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" id="html-root">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Картотека — карточки для языка</title>
 
 <!-- iOS: установка на домашний экран как отдельное приложение -->
@@ -18,21 +18,33 @@
 </head>
 <body>
 
+<div id="storage-error-screen" hidden>
+  <div class="storage-error-box">
+    <div class="storage-error-icon">⚠️</div>
+    <h1 data-i18n="storageError.title">Хранилище недоступно</h1>
+    <p data-i18n="storageError.text">Возможно, включён режим инкогнито/приватного просмотра, или браузер
+      блокирует локальное хранилище для этого сайта. Попробуй открыть приложение в обычном (не приватном)
+      окне, либо разреши сайту использовать хранилище в настройках браузера.</p>
+    <button class="btn-brass" id="storage-error-retry" data-i18n="storageError.retry">Попробовать снова</button>
+  </div>
+</div>
+
 <div id="app">
 
   <!-- ===================== ЭКРАН: КОЛОДЫ ===================== -->
   <section class="view" id="view-decks" data-view="decks">
     <header class="view-header">
-      <h1 class="view-title">Картотека</h1>
-      <p class="view-sub">Твои колоды — независимые наборы карточек</p>
+      <h1 class="view-title" data-i18n="decks.title">Картотека</h1>
+      <p class="view-sub" data-i18n="decks.subtitle">Твои колоды — независимые наборы карточек</p>
     </header>
 
     <div class="deck-list" id="deck-list"></div>
+    <p class="onboarding-hint" id="decks-onboarding-hint" hidden></p>
 
     <button class="btn-tab-new" id="btn-new-deck">
-      <span class="plus">+</span> Новая колода
+      <span class="plus">+</span> <span data-i18n="decks.newDeck">Новая колода</span>
     </button>
-    <button class="btn-tab-new btn-tab-new--secondary" id="btn-merge-decks">
+    <button class="btn-tab-new btn-tab-new--secondary" id="btn-merge-decks" data-i18n="decks.mergeDecks">
       🔗 Объединить колоды
     </button>
   </section>
@@ -41,16 +53,13 @@
   <section class="view" id="view-cards" data-view="cards">
     <header class="view-header">
       <h1 class="view-title" id="cards-deck-name">Колода</h1>
-      <p class="view-sub" id="cards-count-sub">0 карточек</p>
+      <p class="view-sub" id="cards-count-sub">0</p>
     </header>
 
     <div class="card-toolbar">
-      <button class="btn-brass" id="btn-add-card">+ Добавить</button>
-      <button class="btn-brass" id="btn-import-cards">Импорт файла</button>
-      <button class="btn-ghost" id="btn-export-cards">Экспорт</button>
-      <button class="btn-ghost" id="btn-dedup">Убрать дубли</button>
-      <button class="btn-ghost" id="btn-reset-levels">Сбросить уровни</button>
-      <button class="btn-ghost btn-danger" id="btn-delete-all">Очистить колоду</button>
+      <button class="btn-brass" id="btn-add-card" data-i18n="cards.add">+ Добавить</button>
+      <button class="btn-brass" id="btn-import-cards" data-i18n="cards.import">Импорт файла</button>
+      <button class="btn-ghost btn-overflow" id="btn-cards-overflow" data-i18n-aria="cards.moreActionsTitle" aria-label="Ещё действия">⋯</button>
     </div>
 
     <div class="entry-list" id="entry-list"></div>
@@ -63,50 +72,50 @@
     <!-- под-экран: выбор направления -->
     <div id="learn-setup" class="learn-setup">
       <header class="view-header">
-        <h1 class="view-title">Учить</h1>
+        <h1 class="view-title" data-i18n="learn.title">Учить</h1>
         <p class="view-sub" id="learn-deck-info">—</p>
       </header>
-      <p class="setup-hint">В каком направлении показывать карточки?</p>
-      <button class="btn-direction" data-dir="wt">Слово → Перевод</button>
-      <button class="btn-direction" data-dir="tw">Перевод → Слово</button>
-      <button class="btn-direction" data-dir="mix">Вперемешку 🔀</button>
+      <p class="setup-hint" data-i18n="learn.directionHint">В каком направлении показывать карточки?</p>
+      <button class="btn-direction" data-dir="wt" data-i18n="learn.dirWT">Слово → Перевод</button>
+      <button class="btn-direction" data-dir="tw" data-i18n="learn.dirTW">Перевод → Слово</button>
+      <button class="btn-direction" data-dir="mix" data-i18n="learn.dirMix">Вперемешку 🔀</button>
     </div>
 
     <!-- под-экран: сама сессия -->
     <div id="learn-session" class="learn-session" hidden>
       <div class="session-toprow">
-        <div class="session-progress" id="session-progress">осталось: 0</div>
+        <div class="session-progress" id="session-progress">0</div>
         <div class="session-toprow-actions">
-          <button class="card-icon-btn" id="card-edit-btn-top" aria-label="Редактировать карточку" hidden>✏️</button>
-          <button class="card-icon-btn" id="card-delete-btn-top" aria-label="Удалить карточку">🗑</button>
+          <button class="card-icon-btn" id="card-edit-btn-top" data-i18n-aria="editCardModal.title" aria-label="Редактировать карточку" hidden>✏️</button>
+          <button class="card-icon-btn" id="card-delete-btn-top" data-i18n-aria="cards.deleteConfirmTitle" aria-label="Удалить карточку">🗑</button>
         </div>
       </div>
 
       <div class="card-stage">
-        <div class="index-card" id="flip-card">
+        <div class="index-card" id="flip-card" role="button" tabindex="0" aria-label="Карточка">
           <div class="card-hole"></div>
           <button class="card-speak-btn" id="card-speak-btn" aria-label="Прослушать">🔊</button>
           <div class="card-face card-front" id="card-front-text"></div>
           <div class="card-face card-back" id="card-back-text" hidden></div>
-          <div class="card-tap-hint" id="card-tap-hint">нажми, чтобы перевернуть</div>
+          <div class="card-tap-hint" id="card-tap-hint" data-i18n="learn.tapToFlip">нажми, чтобы перевернуть</div>
         </div>
       </div>
 
       <div class="stamp-row" id="stamp-row" hidden>
-        <button class="stamp stamp-no" id="btn-dont-know">✗<br>НЕ ЗНАЛ</button>
-        <button class="stamp stamp-yes" id="btn-know">✓<br>ЗНАЛ</button>
+        <button class="stamp stamp-no" id="btn-dont-know">✗<br><span data-i18n="learn.stampNo">НЕ ЗНАЛ</span></button>
+        <button class="stamp stamp-yes" id="btn-know">✓<br><span data-i18n="learn.stampYes">ЗНАЛ</span></button>
       </div>
 
       <div class="card-actions-bottom-row">
-        <button class="btn-ghost card-action-flex" id="card-edit-btn-bottom" hidden>✏️ Редактировать</button>
-        <button class="btn-ghost btn-danger card-action-flex" id="card-delete-btn-bottom" hidden>🗑 Удалить</button>
+        <button class="btn-ghost card-action-flex" id="card-edit-btn-bottom" data-i18n="learn.editBtnBottom" hidden>✏️ Редактировать</button>
+        <button class="btn-ghost btn-danger card-action-flex" id="card-delete-btn-bottom" data-i18n="learn.deleteBtnBottom" hidden>🗑 Удалить</button>
       </div>
     </div>
 
     <!-- под-экран: пусто / завершено -->
     <div id="learn-empty" class="learn-empty" hidden>
       <p id="learn-empty-text"></p>
-      <button class="btn-brass" id="btn-learn-again">Повторить ещё раз</button>
+      <button class="btn-brass" id="btn-learn-again" data-i18n="learn.repeatAgainBtn">Повторить ещё раз</button>
     </div>
   </section>
 
@@ -115,27 +124,33 @@
 
     <div id="listen-setup" class="learn-setup">
       <header class="view-header">
-        <h1 class="view-title">Слушать</h1>
+        <h1 class="view-title" data-i18n="listen.title">Слушать</h1>
         <p class="view-sub" id="listen-deck-info">—</p>
       </header>
-      <p class="setup-hint">Бот вслух прочитает все карточки колоды подряд — слово, потом перевод.</p>
+      <p class="setup-hint" data-i18n="listen.hint">Бот вслух прочитает все карточки колоды подряд — слово, потом перевод.</p>
 
       <div class="listen-toggles">
         <label class="toggle-row">
           <input type="checkbox" id="listen-shuffle">
-          <span>Случайный порядок</span>
+          <span data-i18n="listen.shuffleLabel">Случайный порядок</span>
         </label>
         <label class="toggle-row">
           <input type="checkbox" id="listen-repeat">
-          <span>Повторять по кругу</span>
+          <span data-i18n="listen.repeatLabel">Повторять по кругу</span>
         </label>
       </div>
 
-      <button class="btn-brass btn-wide" id="btn-start-listen">▶ Начать</button>
+      <button class="btn-brass btn-wide" id="btn-start-listen" data-i18n="listen.startBtn">▶ Начать</button>
     </div>
 
     <div id="listen-session" class="listen-session" hidden>
-      <div class="session-progress session-progress--standalone" id="listen-progress">1 / 1</div>
+      <div class="session-toprow">
+        <div class="session-progress" id="listen-progress">1 / 1</div>
+        <div class="session-toprow-actions">
+          <button class="card-icon-btn" id="listen-edit-btn" data-i18n-aria="editCardModal.title" aria-label="Редактировать карточку">✏️</button>
+          <button class="card-icon-btn" id="listen-delete-btn" data-i18n-aria="cards.deleteConfirmTitle" aria-label="Удалить карточку">🗑</button>
+        </div>
+      </div>
 
       <div class="card-stage">
         <div class="index-card index-card--static">
@@ -151,48 +166,63 @@
         <button class="listen-btn listen-btn--big" id="btn-listen-playpause" aria-label="Пауза">⏸</button>
         <button class="listen-btn" id="btn-listen-next" aria-label="Следующая">⏭</button>
       </div>
-      <button class="btn-ghost btn-wide" id="btn-listen-stop">Закончить</button>
+      <button class="btn-ghost btn-wide" id="btn-listen-stop" data-i18n="listen.finishBtn">Закончить</button>
     </div>
 
     <div id="listen-empty" class="learn-empty" hidden>
       <p id="listen-empty-text"></p>
+      <button class="btn-brass" id="btn-listen-again" data-i18n="listen.startAgainBtn">Слушать заново</button>
     </div>
   </section>
 
   <!-- ===================== ЭКРАН: СТАТИСТИКА ===================== -->
-  <section class="view" id="view-stats" data-view="stats">
+  <!-- ===================== ЭКРАН: ЕЩЁ (статистика + настройки) ===================== -->
+  <section class="view" id="view-more" data-view="more">
     <header class="view-header">
-      <h1 class="view-title">Статистика</h1>
+      <h1 class="view-title" data-i18n="stats.title">Статистика</h1>
       <p class="view-sub" id="stats-deck-name">—</p>
     </header>
     <div class="stat-grid" id="stat-grid"></div>
-  </section>
 
-  <!-- ===================== ЭКРАН: НАСТРОЙКИ ===================== -->
-  <section class="view" id="view-settings" data-view="settings">
-    <header class="view-header">
-      <h1 class="view-title">Настройки</h1>
-      <p class="view-sub">Поведение приложения на этом устройстве</p>
+    <header class="view-header view-header--secondary">
+      <h1 class="view-title" data-i18n="settings.title">Настройки</h1>
+      <p class="view-sub" data-i18n="settings.subtitle">Поведение приложения на этом устройстве</p>
     </header>
+
+    <div class="settings-group">
+      <p class="settings-label" data-i18n="settings.languageLabel">Язык приложения</p>
+      <label class="radio-row">
+        <input type="radio" name="app-language" id="setting-lang-ru" value="ru">
+        <span data-i18n="appLang.ru">Русский</span>
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="app-language" id="setting-lang-en" value="en">
+        <span data-i18n="appLang.en">English</span>
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="app-language" id="setting-lang-pl" value="pl">
+        <span data-i18n="appLang.pl">Polski</span>
+      </label>
+    </div>
 
     <div class="settings-group">
       <label class="toggle-row toggle-row--settings">
         <input type="checkbox" id="setting-confirm-delete" checked>
-        <span>Подтверждать удаление карточки</span>
+        <span data-i18n="settings.confirmDeleteLabel">Подтверждать удаление карточки</span>
       </label>
-      <p class="settings-hint">Если выключить — карточка будет удаляться сразу по нажатию 🗑,
+      <p class="settings-hint" data-i18n="settings.confirmDeleteHint">Если выключить — карточка будет удаляться сразу по нажатию 🗑,
         без всплывающего вопроса «Уверен?».</p>
     </div>
 
     <div class="settings-group">
-      <p class="settings-label">Кнопка удаления карточки в «Учить»</p>
+      <p class="settings-label" data-i18n="settings.deletePositionLabel">Кнопка удаления карточки в «Учить»</p>
       <label class="radio-row">
         <input type="radio" name="delete-btn-position" id="setting-delpos-top" value="top">
-        <span>Сверху, рядом со счётчиком «осталось выучить»</span>
+        <span data-i18n="settings.deletePositionTop">Сверху, рядом со счётчиком «осталось выучить»</span>
       </label>
       <label class="radio-row">
         <input type="radio" name="delete-btn-position" id="setting-delpos-stamps" value="stamps">
-        <span>Внизу, под кнопками «Знал» / «Не знал»</span>
+        <span data-i18n="settings.deletePositionStamps">Внизу, под кнопками «Знал» / «Не знал»</span>
       </label>
     </div>
   </section>
@@ -201,27 +231,23 @@
   <nav class="tabbar" id="tabbar">
     <button class="tab-btn is-active" data-target="decks">
       <svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>
-      <span>Колоды</span>
+      <span data-i18n="tab.decks">Колоды</span>
     </button>
     <button class="tab-btn" data-target="cards">
       <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
-      <span>Карточки</span>
+      <span data-i18n="tab.cards">Карточки</span>
     </button>
     <button class="tab-btn" data-target="learn">
       <svg viewBox="0 0 24 24"><path d="M4 5c3-1.5 6-1.5 8 0 2-1.5 5-1.5 8 0v13c-3-1.5-6-1.5-8 0-2-1.5-5-1.5-8 0z"/></svg>
-      <span>Учить</span>
+      <span data-i18n="tab.learn">Учить</span>
     </button>
     <button class="tab-btn" data-target="listen">
       <svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 5V5L8 10H4z" fill="currentColor" stroke="none"/><path d="M16 9a4 4 0 010 6M18.5 6.5a8 8 0 010 11" fill="none"/></svg>
-      <span>Слушать</span>
+      <span data-i18n="tab.listen">Слушать</span>
     </button>
-    <button class="tab-btn" data-target="stats">
-      <svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
-      <span>Статистика</span>
-    </button>
-    <button class="tab-btn" data-target="settings">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.4 7.4 0 000-2l2-1.5-2-3.4-2.4 1a7.6 7.6 0 00-1.7-1L15 3h-6l-.3 2.6a7.6 7.6 0 00-1.7 1l-2.4-1-2 3.4L4.6 11a7.4 7.4 0 000 2l-2 1.5 2 3.4 2.4-1a7.6 7.6 0 001.7 1L9 21h6l.3-2.6a7.6 7.6 0 001.7-1l2.4 1 2-3.4z"/></svg>
-      <span>Настройки</span>
+    <button class="tab-btn" data-target="more">
+      <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+      <span data-i18n="tab.more">Ещё</span>
     </button>
   </nav>
 </div>
@@ -230,87 +256,99 @@
 
 <div class="modal-backdrop" id="modal-backdrop" hidden>
 
-  <div class="modal" id="modal-new-deck" hidden>
+  <div class="modal" id="modal-new-deck" role="dialog" aria-modal="true" aria-labelledby="deck-modal-title" tabindex="-1" hidden>
     <h2 id="deck-modal-title">Новая колода</h2>
-    <p class="modal-hint">Например: «Английский-Польский». Языки нужны, чтобы озвучка в «Слушать» читала правильным голосом.</p>
-    <input type="text" id="input-new-deck-name" placeholder="Название колоды" maxlength="60">
+    <p class="modal-hint" data-i18n="deckModal.hint">Например: «Английский-Польский». Языки нужны, чтобы озвучка в «Слушать» читала правильным голосом.</p>
+    <input type="text" id="input-new-deck-name" data-i18n-placeholder="deckModal.namePlaceholder" placeholder="Название колоды" maxlength="60">
 
-    <label class="select-label">Язык слов (карточек)</label>
+    <label class="select-label" data-i18n="deckModal.wordLangLabel">Язык слов (карточек)</label>
     <select id="select-word-lang" class="modal-select"></select>
 
-    <label class="select-label">Язык перевода</label>
+    <label class="select-label" data-i18n="deckModal.translationLangLabel">Язык перевода</label>
     <select id="select-translation-lang" class="modal-select"></select>
 
     <div class="modal-actions">
-      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
       <button class="btn-brass" id="confirm-new-deck">Создать</button>
     </div>
   </div>
 
-  <div class="modal" id="modal-add-card" hidden>
-    <h2>Новая карточка</h2>
-    <input type="text" id="input-card-word" placeholder="Слово / фраза">
-    <input type="text" id="input-card-translation" placeholder="Перевод">
+  <div class="modal" id="modal-cards-overflow" role="dialog" aria-modal="true" aria-labelledby="cards-overflow-title" tabindex="-1" hidden>
+    <h2 id="cards-overflow-title" data-i18n="cards.moreActionsTitle">Ещё действия</h2>
+    <button class="overflow-item" id="btn-export-cards" data-i18n="cards.export">Экспорт</button>
+    <button class="overflow-item" id="btn-dedup" data-i18n="cards.dedup">Убрать дубли</button>
+    <button class="overflow-item" id="btn-reset-levels" data-i18n="cards.resetLevels">Сбросить уровни</button>
+    <div class="overflow-divider"></div>
+    <button class="overflow-item overflow-item--danger" id="btn-delete-all" data-i18n="cards.clearDeck">Очистить колоду</button>
     <div class="modal-actions">
-      <button class="btn-ghost" data-close>Отмена</button>
-      <button class="btn-brass" id="confirm-add-card">Добавить</button>
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
     </div>
   </div>
 
-  <div class="modal" id="modal-edit-card" hidden>
-    <h2>Редактировать карточку</h2>
-    <input type="text" id="input-edit-card-word" placeholder="Слово / фраза">
-    <input type="text" id="input-edit-card-translation" placeholder="Перевод">
+  <div class="modal" id="modal-add-card" role="dialog" aria-modal="true" aria-labelledby="add-card-modal-title" tabindex="-1" hidden>
+    <h2 id="add-card-modal-title" data-i18n="addCardModal.title">Новая карточка</h2>
+    <input type="text" id="input-card-word" data-i18n-placeholder="card.wordPlaceholder" placeholder="Слово / фраза">
+    <input type="text" id="input-card-translation" data-i18n-placeholder="card.translationPlaceholder" placeholder="Перевод">
     <div class="modal-actions">
-      <button class="btn-ghost" data-close>Отмена</button>
-      <button class="btn-brass" id="confirm-edit-card">Сохранить</button>
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
+      <button class="btn-brass" id="confirm-add-card" data-i18n="card.addBtn">Добавить</button>
     </div>
   </div>
 
-  <div class="modal" id="modal-confirm" hidden>
+  <div class="modal" id="modal-edit-card" role="dialog" aria-modal="true" aria-labelledby="edit-card-modal-title" tabindex="-1" hidden>
+    <h2 id="edit-card-modal-title" data-i18n="editCardModal.title">Редактировать карточку</h2>
+    <input type="text" id="input-edit-card-word" data-i18n-placeholder="card.wordPlaceholder" placeholder="Слово / фраза">
+    <input type="text" id="input-edit-card-translation" data-i18n-placeholder="card.translationPlaceholder" placeholder="Перевод">
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
+      <button class="btn-brass" id="confirm-edit-card" data-i18n="card.saveBtn">Сохранить</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title" tabindex="-1" hidden>
     <h2 id="confirm-title">Уверен?</h2>
     <p class="modal-hint" id="confirm-text"></p>
     <div class="modal-actions">
-      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
       <button class="btn-danger-solid" id="confirm-action-btn">Удалить</button>
     </div>
   </div>
 
-  <div class="modal" id="modal-export" hidden>
-    <h2>Экспорт колоды</h2>
-    <p class="modal-hint">Скачает файл со всеми карточками активной колоды — его потом можно
+  <div class="modal" id="modal-export" role="dialog" aria-modal="true" aria-labelledby="export-modal-title" tabindex="-1" hidden>
+    <h2 id="export-modal-title" data-i18n="exportModal.title">Экспорт колоды</h2>
+    <p class="modal-hint" data-i18n="exportModal.hint">Скачает файл со всеми карточками активной колоды — его потом можно
       будет снова загрузить через «Импорт файла», в этом или другом устройстве.</p>
     <div class="modal-actions">
-      <button class="btn-ghost" data-close>Отмена</button>
-      <button class="btn-brass" id="export-as-csv">Скачать .csv</button>
-      <button class="btn-brass" id="export-as-json">Скачать .json</button>
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
+      <button class="btn-brass" id="export-as-csv" data-i18n="exportModal.csvBtn">Скачать .csv</button>
+      <button class="btn-brass" id="export-as-json" data-i18n="exportModal.jsonBtn">Скачать .json</button>
     </div>
   </div>
 
-  <div class="modal" id="modal-merge" hidden>
-    <h2>Объединить колоды</h2>
-    <p class="modal-hint">Работает только для колод с одинаковой языковой парой (слово/перевод).
+  <div class="modal" id="modal-merge" role="dialog" aria-modal="true" aria-labelledby="merge-modal-title" tabindex="-1" hidden>
+    <h2 id="merge-modal-title" data-i18n="merge.title">Объединить колоды</h2>
+    <p class="modal-hint" data-i18n="merge.hint">Работает только для колод с одинаковой языковой парой (слово/перевод).
       Карточки первой колоды переедут во вторую (дубли пропустятся), а первая колода удалится.</p>
 
-    <label class="select-label">Объединить колоду</label>
+    <label class="select-label" data-i18n="merge.sourceLabel">Объединить колоду</label>
     <select id="select-merge-source" class="modal-select"></select>
 
-    <label class="select-label">...в колоду</label>
+    <label class="select-label" data-i18n="merge.targetLabel">...в колоду</label>
     <select id="select-merge-target" class="modal-select"></select>
 
     <div class="modal-actions">
-      <button class="btn-ghost" data-close>Отмена</button>
-      <button class="btn-brass" id="confirm-merge-decks">Объединить</button>
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
+      <button class="btn-brass" id="confirm-merge-decks" data-i18n="merge.confirmBtn">Объединить</button>
     </div>
   </div>
-  <div class="modal" id="modal-reset-levels" hidden>
-    <h2>Сбросить уровни карточек</h2>
-    <p class="modal-hint">Карточки не удаляются — сбрасывается только их прогресс повторения,
+  <div class="modal" id="modal-reset-levels" role="dialog" aria-modal="true" aria-labelledby="reset-modal-title" tabindex="-1" hidden>
+    <h2 id="reset-modal-title" data-i18n="resetModal.title">Сбросить уровни карточек</h2>
+    <p class="modal-hint" data-i18n="resetModal.hint">Карточки не удаляются — сбрасывается только их прогресс повторения,
       и все они сразу становятся доступны к повторению. Действие затрагивает всю активную колоду.</p>
     <div class="modal-actions">
-      <button class="btn-ghost" data-close>Отмена</button>
-      <button class="btn-brass" id="reset-levels-to-1">До уровня 1</button>
-      <button class="btn-brass" id="reset-levels-to-0">До уровня 0</button>
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
+      <button class="btn-brass" id="reset-levels-to-1" data-i18n="resetModal.to1">До уровня 1</button>
+      <button class="btn-brass" id="reset-levels-to-0" data-i18n="resetModal.to0">До уровня 0</button>
     </div>
   </div>
 
@@ -318,6 +356,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="i18n.js"></script>
 <script src="db.js"></script>
 <script src="speech.js"></script>
 <script src="app.js"></script>
