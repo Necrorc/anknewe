@@ -720,8 +720,16 @@ function renderCardFace() {
 
   $('#card-front-text').textContent = cur.front;
   $('#card-back-text').textContent = cur.back;
-  $('#card-front-text').hidden = revealed;
-  $('#card-back-text').hidden = !revealed;
+  // Обе стороны всегда присутствуют в раскладке (нужно для 3D-переворота —
+  // они наложены друг на друга и повёрнуты на 180° одна относительно другой,
+  // видимость управляется через transform + backface-visibility в CSS, не
+  // через display:none/hidden). Для скринридеров скрываем невидимую сторону
+  // через aria-hidden, а не через "hidden", чтобы не сломать раскладку.
+  $('#card-front-text').hidden = false;
+  $('#card-back-text').hidden = false;
+  $('#card-front-text').setAttribute('aria-hidden', revealed ? 'true' : 'false');
+  $('#card-back-text').setAttribute('aria-hidden', revealed ? 'false' : 'true');
+  $('#flip-card').classList.toggle('is-flipped', revealed);
   $('#card-tap-hint').textContent = revealed ? t('learn.tapToFlipBack') : t('learn.tapToFlip');
   $('#card-tap-hint').hidden = false;
   $('#flip-card').setAttribute('aria-label', t('learn.cardAriaLabel', { text: revealed ? cur.back : cur.front }));
