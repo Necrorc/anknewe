@@ -586,6 +586,17 @@ button:disabled {
 #flip-card.is-flipped:active { transform: rotateY(180deg) scale(.985); }
 .index-card:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 4px; }
 
+/* Используется JS-ом на долю секунды при подстановке НОВОЙ карточки после
+   ответа — чтобы сброс поворота с предыдущей (перевёрнутой) карточки не
+   анимировался вместе с уже обновлённым текстом (иначе на мгновение видно,
+   как переворачивается уже подставленный перевод следующего слова). */
+#flip-card.no-flip-anim,
+#flip-card.no-flip-anim .card-hole,
+#flip-card.no-flip-anim .card-speak-btn,
+#flip-card.no-flip-anim .card-tap-hint {
+  transition: none !important;
+}
+
 .card-hole {
   position: absolute;
   top: 16px;

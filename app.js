@@ -995,11 +995,15 @@ async function showNextCard() {
   state.learn.hasRevealedOnce = false;
 
   $('#session-progress').textContent = t('learn.progressLabel', { n: new Set(queue).size });
-  renderCardFace();
+  renderCardFace(true);
 }
 
-/** Отрисовывает текущую сторону карточки (лицевую или обратную) согласно state.learn.revealed. */
-function renderCardFace() {
+/** Отрисовывает текущую сторону карточки (лицевую или обратную) согласно state.learn.revealed.
+ * instant=true — для НОВОЙ карточки (после ответа): сбрасывает поворот без анимации,
+ * иначе на мгновение было бы видно, как уже подставленный новый текст "доворачивается"
+ * с предыдущего (перевёрнутого) состояния карточки. Обычный клик по карточке (flipCurrentCard)
+ * всегда анимируется как обычно. */
+function renderCardFace(instant = false) {
   const cur = state.learn.current;
   if (!cur) return;
   const revealed = state.learn.revealed;
@@ -1015,10 +1019,20 @@ function renderCardFace() {
   $('#card-back-text').hidden = false;
   $('#card-front-text').setAttribute('aria-hidden', revealed ? 'true' : 'false');
   $('#card-back-text').setAttribute('aria-hidden', revealed ? 'false' : 'true');
-  $('#flip-card').classList.toggle('is-flipped', revealed);
+
+  const flipCard = $('#flip-card');
+  if (instant) {
+    flipCard.classList.add('no-flip-anim');
+    flipCard.classList.toggle('is-flipped', revealed);
+    flipCard.offsetHeight; // форсируем reflow — иначе браузер может "схлопнуть" смену transition и transform в один кадр и всё равно анимировать
+    flipCard.classList.remove('no-flip-anim');
+  } else {
+    flipCard.classList.toggle('is-flipped', revealed);
+  }
+
   $('#card-tap-hint').textContent = revealed ? t('learn.tapToFlipBack') : t('learn.tapToFlip');
   $('#card-tap-hint').hidden = false;
-  $('#flip-card').setAttribute('aria-label', t('learn.cardAriaLabel', { text: revealed ? cur.back : cur.front }));
+  flipCard.setAttribute('aria-label', t('learn.cardAriaLabel', { text: revealed ? cur.back : cur.front }));
   // Пока карточка не перевёрнута ни разу — печатей "знал/не знал" ещё не видно,
   // но дальше при перелистывании туда-обратно они остаются на месте
   $('#stamp-row').hidden = !state.learn.hasRevealedOnce;
