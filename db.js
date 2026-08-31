@@ -5,7 +5,7 @@
  */
 
 const DB_NAME = 'flashcards_pwa';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // Интервалы повторения (в днях) по уровню карточки (box 0..5)
 const INTERVALS = { 0: 0, 1: 1, 2: 3, 3: 7, 4: 14, 5: 30 };
@@ -37,6 +37,12 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
+      }
+      // v2: журнал ответов — для retention, heatmap активности и серии дней (streak)
+      if (!db.objectStoreNames.contains('review_log')) {
+        const logStore = db.createObjectStore('review_log', { keyPath: 'id', autoIncrement: true });
+        logStore.createIndex('by_deck', 'deckId', { unique: false });
+        logStore.createIndex('by_day', 'day', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -214,13 +220,20 @@ async function cardExists(deckId, word, translation) {
   return cards.some((c) => c.word === w && c.translation === tr);
 }
 
-async function addCard(deckId, word, translation) {
+/** Приводит теги к чистому массиву уникальных непустых строк — принимает и массив, и строку через запятую. */
+function normalizeTags(tags) {
+  if (Array.isArray(tags)) return [...new Set(tags.map((s) => String(s).trim()).filter(Boolean))];
+  if (typeof tags === 'string') return normalizeTags(tags.split(','));
+  return [];
+}
+
+async function addCard(deckId, word, translation, tags = []) {
   if (await cardExists(deckId, word, translation)) return false;
   const t = await tx('cards', 'readwrite');
   const n = now();
   t.objectStore('cards').add({
     deckId, word: word.trim(), translation: translation.trim(),
-    box: 0, nextReview: n, createdAt: n,
+    box: 0, nextReview: n, createdAt: n, tags: normalizeTags(tags),
   });
   await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
   return true;
@@ -268,17 +281,19 @@ async function restoreCard(cardData) {
     translation: cardData.translation,
     box: cardData.box,
     nextReview: cardData.nextReview,
+    tags: normalizeTags(cardData.tags),
     createdAt: cardData.createdAt || now(),
   }));
   return id;
 }
 
 /**
- * Меняет слово/перевод существующей карточки. Если в той же колоде уже есть
- * другая карточка с такой же парой слово+перевод — правка отклоняется как дубль.
- * Возвращает true при успехе, false если это создало бы дубль.
+ * Меняет слово/перевод (и опционально теги) существующей карточки. Если в той
+ * же колоде уже есть другая карточка с такой же парой слово+перевод — правка
+ * отклоняется как дубль. Возвращает true при успехе, false если это создало
+ * бы дубль. Если tags не передан — теги карточки остаются как были.
  */
-async function updateCard(id, word, translation) {
+async function updateCard(id, word, translation, tags) {
   const card = await getCard(id);
   if (!card) return false;
 
@@ -287,8 +302,9 @@ async function updateCard(id, word, translation) {
   const wouldDuplicate = siblings.some((c) => c.id !== id && c.word === w && c.translation === tr);
   if (wouldDuplicate) return false;
 
+  const newTags = tags !== undefined ? normalizeTags(tags) : (card.tags || []);
   const t = await tx('cards', 'readwrite');
-  t.objectStore('cards').put({ ...card, word: w, translation: tr });
+  t.objectStore('cards').put({ ...card, word: w, translation: tr, tags: newTags });
   await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
   return true;
 }
@@ -325,10 +341,11 @@ async function countCards(deckId) {
   return { total: cards.length, due };
 }
 
-async function getDueCards(deckId, limit = 20) {
+async function getDueCards(deckId, limit = 20, tag = null) {
   const cards = await getCardsByDeck(deckId);
   const n = new Date();
-  const due = cards.filter((c) => new Date(c.nextReview) <= n);
+  let due = cards.filter((c) => new Date(c.nextReview) <= n);
+  if (tag) due = due.filter((c) => (c.tags || []).includes(tag));
   // случайная выборка, а не "первые N" — иначе всегда попадались бы одни
   // и те же старые по дате добавления карточки
   for (let i = due.length - 1; i > 0; i--) {
@@ -366,4 +383,217 @@ async function resetDeckLevels(deckId, targetBox) {
   }
   await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
   return cards.length;
+}
+
+/* ---------------------------------------------------------------------- *
+ * Теги
+ * ---------------------------------------------------------------------- */
+
+/** Все уникальные теги, встречающиеся у карточек колоды (отсортированы). */
+async function getAllTagsForDeck(deckId) {
+  const cards = await getCardsByDeck(deckId);
+  const set = new Set();
+  for (const c of cards) (c.tags || []).forEach((tg) => set.add(tg));
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/* ---------------------------------------------------------------------- *
+ * Обзор по нескольким колодам ("Учить всё")
+ * ---------------------------------------------------------------------- */
+
+/** Колоды с той же языковой парой слово/перевод, что и у переданной (включая её саму). */
+async function getDecksWithSameLangPair(wordLang, translationLang) {
+  const decks = await getAllDecks();
+  return decks.filter((d) => d.wordLang === wordLang && d.translationLang === translationLang);
+}
+
+/** То же, что getDueCards, но собирает карточки сразу из нескольких колод (каждая карточка
+ * сохраняет свой настоящий deckId — прогресс/лог по-прежнему пишутся в "родную" колоду). */
+async function getDueCardsAcrossDecks(deckIds, limit = 20, tag = null) {
+  let all = [];
+  for (const id of deckIds) {
+    const cards = await getCardsByDeck(id);
+    all = all.concat(cards);
+  }
+  const n = new Date();
+  let due = all.filter((c) => new Date(c.nextReview) <= n);
+  if (tag) due = due.filter((c) => (c.tags || []).includes(tag));
+  for (let i = due.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [due[i], due[j]] = [due[j], due[i]];
+  }
+  return due.slice(0, limit);
+}
+
+/* ---------------------------------------------------------------------- *
+ * Журнал ответов: retention, heatmap, дневная цель и серия дней (streak)
+ * ---------------------------------------------------------------------- */
+
+/** Локальный (не UTC) ключ дня 'YYYY-MM-DD' — иначе heatmap/streak "съезжали" бы у пользователей
+ * восточнее/западнее UTC около полуночи. */
+function dayKey(d = new Date()) {
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+/** Пишет в журнал факт ответа по карточке — вызывается один раз на карточку за
+ * сессию (по первой попытке — см. app.js), не на каждый повтор внутри сессии. */
+async function logReview(cardId, deckId, correct) {
+  const t = await tx('review_log', 'readwrite');
+  t.objectStore('review_log').add({
+    cardId, deckId, correct: !!correct,
+    timestamp: now(),
+    day: dayKey(),
+  });
+  await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+}
+
+async function getAllReviewLogs() {
+  const t = await tx('review_log', 'readonly');
+  return reqToPromise(t.objectStore('review_log').getAll());
+}
+
+async function getReviewLogsForDeckSince(deckId, sinceDay) {
+  const t = await tx('review_log', 'readonly');
+  const idx = t.objectStore('review_log').index('by_deck');
+  const all = await reqToPromise(idx.getAll(IDBKeyRange.only(deckId)));
+  return all.filter((r) => r.day >= sinceDay);
+}
+
+/** Доля правильных ответов в активной колоде за последние `days` дней. rate=null, если ответов не было. */
+async function getRetention(deckId, days) {
+  const since = dayKey(new Date(Date.now() - (days - 1) * 86400000));
+  const logs = await getReviewLogsForDeckSince(deckId, since);
+  if (logs.length === 0) return { total: 0, correct: 0, rate: null };
+  const correct = logs.filter((l) => l.correct).length;
+  return { total: logs.length, correct, rate: correct / logs.length };
+}
+
+/** { 'YYYY-MM-DD': количество ответов } за последние `days` дней в колоде — для тепловой карты. */
+async function getHeatmapData(deckId, days = 90) {
+  const since = dayKey(new Date(Date.now() - (days - 1) * 86400000));
+  const logs = await getReviewLogsForDeckSince(deckId, since);
+  const counts = {};
+  for (const l of logs) counts[l.day] = (counts[l.day] || 0) + 1;
+  return counts;
+}
+
+/** Сколько карточек отвечено СЕГОДНЯ по всем колодам (для дневной цели/серии — это общая привычка,
+ * не привязанная к конкретной колоде). */
+async function getTodayReviewCount() {
+  const today = dayKey();
+  const all = await getAllReviewLogs();
+  return all.filter((r) => r.day === today).length;
+}
+
+/**
+ * Обновляет серию дней (streak), если дневная цель на сегодня достигнута и ещё не была
+ * засчитана. Возвращает { streak, todayCount, justCompleted }.
+ */
+async function updateStreakIfGoalReached(dailyGoal) {
+  const today = dayKey();
+  const todayCount = await getTodayReviewCount();
+  const streak = (await getSetting('streak')) || { current: 0, longest: 0, lastCompletedDate: null };
+
+  if (todayCount >= dailyGoal && streak.lastCompletedDate !== today) {
+    const yesterday = dayKey(new Date(Date.now() - 86400000));
+    const newCurrent = streak.lastCompletedDate === yesterday ? streak.current + 1 : 1;
+    const newStreak = { current: newCurrent, longest: Math.max(streak.longest, newCurrent), lastCompletedDate: today };
+    await setSetting('streak', newStreak);
+    return { streak: newStreak, todayCount, justCompleted: true };
+  }
+  return { streak, todayCount, justCompleted: false };
+}
+
+/* ---------------------------------------------------------------------- *
+ * Прогноз нагрузки повторений
+ * ---------------------------------------------------------------------- */
+
+/** Сколько карточек колоды будет к повторению сегодня/завтра/за неделю/за месяц/позже. */
+async function getForecastBuckets(deckId) {
+  const cards = await getCardsByDeck(deckId);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const buckets = { today: 0, tomorrow: 0, week: 0, month: 0, later: 0 };
+  for (const c of cards) {
+    const nr = new Date(c.nextReview);
+    const diffDays = Math.floor((nr - startOfToday) / 86400000);
+    if (diffDays <= 0) buckets.today++;
+    else if (diffDays === 1) buckets.tomorrow++;
+    else if (diffDays <= 7) buckets.week++;
+    else if (diffDays <= 30) buckets.month++;
+    else buckets.later++;
+  }
+  return buckets;
+}
+
+/** Массив [{day:'YYYY-MM-DD', count}] на `horizonDays` вперёд, начиная с сегодня (для графика 7/30 дней). */
+async function getForecastByDay(deckId, horizonDays) {
+  const cards = await getCardsByDeck(deckId);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const order = [];
+  const buckets = {};
+  for (let i = 0; i < horizonDays; i++) {
+    const key = dayKey(new Date(start.getTime() + i * 86400000));
+    order.push(key);
+    buckets[key] = 0;
+  }
+  const horizonEnd = new Date(start.getTime() + horizonDays * 86400000);
+  const todayKey = order[0];
+  for (const c of cards) {
+    const nr = new Date(c.nextReview);
+    if (nr < start) { buckets[todayKey]++; continue; } // просроченные — считаем "на сегодня"
+    if (nr < horizonEnd) {
+      const key = dayKey(nr);
+      if (key in buckets) buckets[key]++;
+    }
+  }
+  return order.map((day) => ({ day, count: buckets[day] }));
+}
+
+/** Сколько карточек колоды на каждом уровне box 0..5. */
+async function getBoxDistribution(deckId) {
+  const cards = await getCardsByDeck(deckId);
+  const dist = [0, 0, 0, 0, 0, 0];
+  for (const c of cards) dist[Math.max(0, Math.min(5, c.box || 0))]++;
+  return dist;
+}
+
+/* ---------------------------------------------------------------------- *
+ * Полный бэкап (экспорт/импорт с прогрессом) — формат .kdeck.json
+ * ---------------------------------------------------------------------- */
+
+/** Импортирует карточки С прогрессом (box/nextReview/tags) — для полного бэкапа
+ * и шаринга колод. Дубли (по слову+переводу) пропускаются, как и везде. */
+async function importFullBackupCards(deckId, cards) {
+  const existing = new Set((await getCardsByDeck(deckId)).map((c) => c.word + '\u0001' + c.translation));
+  const seenInBatch = new Set();
+  const nowIso = now();
+  const toInsert = [];
+  let skipped = 0;
+
+  for (const c of (cards || [])) {
+    const word = String(c.word || '').trim();
+    const translation = String(c.translation || '').trim();
+    if (!word || !translation) { skipped++; continue; }
+    const key = word + '\u0001' + translation;
+    if (existing.has(key) || seenInBatch.has(key)) { skipped++; continue; }
+    seenInBatch.add(key);
+
+    const box = Number.isInteger(c.box) ? Math.max(0, Math.min(5, c.box)) : 0;
+    const nextReview = (c.nextReview && !isNaN(Date.parse(c.nextReview))) ? c.nextReview : nowIso;
+    toInsert.push({
+      deckId, word, translation, box, nextReview,
+      tags: normalizeTags(c.tags), createdAt: nowIso,
+    });
+  }
+
+  if (toInsert.length) {
+    const t = await tx('cards', 'readwrite');
+    const store = t.objectStore('cards');
+    for (const c of toInsert) store.add(c);
+    await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+  }
+  return { added: toInsert.length, skipped };
 }

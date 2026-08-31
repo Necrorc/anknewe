@@ -38,6 +38,17 @@
       <p class="view-sub" data-i18n="decks.subtitle">Твои колоды — независимые наборы карточек</p>
     </header>
 
+    <div class="streak-daily-row">
+      <div class="streak-badge" id="streak-badge" hidden>
+        <span class="streak-flame">🔥</span>
+        <span id="streak-text"></span>
+      </div>
+      <div class="daily-goal-bar" id="daily-goal-bar">
+        <div class="daily-goal-track"><div class="daily-goal-fill" id="daily-goal-fill"></div></div>
+        <span class="daily-goal-label" id="daily-goal-label"></span>
+      </div>
+    </div>
+
     <div class="deck-list" id="deck-list"></div>
     <p class="onboarding-hint" id="decks-onboarding-hint" hidden></p>
 
@@ -75,6 +86,17 @@
         <h1 class="view-title" data-i18n="learn.title">Учить</h1>
         <p class="view-sub" id="learn-deck-info">—</p>
       </header>
+
+      <p class="daily-goal-inline" id="learn-daily-goal-inline"></p>
+
+      <label class="toggle-row learn-all-toggle" id="learn-all-toggle-row" hidden>
+        <input type="checkbox" id="learn-all-decks-toggle">
+        <span id="learn-all-decks-label" data-i18n="learn.allDecksLabel">Учить карточки из всех колод с этим языком</span>
+      </label>
+
+      <label class="select-label" id="learn-tag-filter-label" data-i18n="learn.tagFilterLabel" hidden>Только тег</label>
+      <select id="learn-tag-filter" class="modal-select" hidden></select>
+
       <p class="setup-hint" data-i18n="learn.directionHint">В каком направлении показывать карточки?</p>
       <button class="btn-direction" data-dir="wt" data-i18n="learn.dirWT">Слово → Перевод</button>
       <button class="btn-direction" data-dir="tw" data-i18n="learn.dirTW">Перевод → Слово</button>
@@ -184,6 +206,35 @@
     </header>
     <div class="stat-grid" id="stat-grid"></div>
 
+    <div class="stat-block">
+      <p class="stat-block-title" data-i18n="stats.forecastTitle">Прогноз повторений</p>
+      <div class="forecast-row" id="forecast-row"></div>
+    </div>
+
+    <div class="stat-block">
+      <p class="stat-block-title" data-i18n="stats.retentionTitle">Точность ответов (retention)</p>
+      <div class="retention-row" id="retention-row"></div>
+    </div>
+
+    <div class="stat-block">
+      <p class="stat-block-title" data-i18n="stats.levelsTitle">Распределение по уровням</p>
+      <div class="levels-bar" id="levels-bar"></div>
+    </div>
+
+    <div class="stat-block">
+      <p class="stat-block-title" data-i18n="stats.heatmapTitle">Активность за 90 дней</p>
+      <div class="heatmap-grid" id="heatmap-grid"></div>
+      <div class="heatmap-legend">
+        <span data-i18n="stats.heatmapLess">меньше</span>
+        <span class="heatmap-cell" data-level="0"></span>
+        <span class="heatmap-cell" data-level="1"></span>
+        <span class="heatmap-cell" data-level="2"></span>
+        <span class="heatmap-cell" data-level="3"></span>
+        <span class="heatmap-cell" data-level="4"></span>
+        <span data-i18n="stats.heatmapMore">больше</span>
+      </div>
+    </div>
+
     <header class="view-header view-header--secondary">
       <h1 class="view-title" data-i18n="settings.title">Настройки</h1>
       <p class="view-sub" data-i18n="settings.subtitle">Поведение приложения на этом устройстве</p>
@@ -219,6 +270,25 @@
         <input type="radio" name="app-theme" id="setting-theme-dark" value="dark">
         <span data-i18n="settings.themeDark">Тёмная</span>
       </label>
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-label" data-i18n="settings.dailyGoalLabel">Дневная цель (карточек в день)</p>
+      <input type="number" id="setting-daily-goal" class="modal-select" min="1" max="500" step="1">
+      <p class="settings-hint" data-i18n="settings.dailyGoalHint">Учитываются ответы во всех колодах вместе — так считается серия дней подряд.</p>
+    </div>
+
+    <div class="settings-group">
+      <p class="settings-label" data-i18n="settings.reminderLabel">Напоминание повторить карточки</p>
+      <label class="toggle-row toggle-row--settings">
+        <input type="checkbox" id="setting-reminder-enabled">
+        <span data-i18n="settings.reminderEnable">Включить напоминание</span>
+      </label>
+      <input type="time" id="setting-reminder-time" class="modal-select" value="20:00">
+      <button class="btn-ghost btn-wide" id="btn-request-notifications" data-i18n="settings.requestPermission">Разрешить уведомления</button>
+      <p class="settings-hint" id="notification-status-hint"></p>
+      <p class="settings-hint" data-i18n="settings.reminderHint">Работает, пока приложение открыто хотя бы в фоновой вкладке —
+        без сервера push-уведомления в закрытое приложение технически невозможны.</p>
     </div>
 
     <div class="settings-group">
@@ -305,6 +375,7 @@
     <h2 id="add-card-modal-title" data-i18n="addCardModal.title">Новая карточка</h2>
     <input type="text" id="input-card-word" data-i18n-placeholder="card.wordPlaceholder" placeholder="Слово / фраза">
     <input type="text" id="input-card-translation" data-i18n-placeholder="card.translationPlaceholder" placeholder="Перевод">
+    <input type="text" id="input-card-tags" data-i18n-placeholder="card.tagsPlaceholder" placeholder="Теги через запятую (необязательно)">
     <div class="modal-actions">
       <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
       <button class="btn-brass" id="confirm-add-card" data-i18n="card.addBtn">Добавить</button>
@@ -315,6 +386,7 @@
     <h2 id="edit-card-modal-title" data-i18n="editCardModal.title">Редактировать карточку</h2>
     <input type="text" id="input-edit-card-word" data-i18n-placeholder="card.wordPlaceholder" placeholder="Слово / фраза">
     <input type="text" id="input-edit-card-translation" data-i18n-placeholder="card.translationPlaceholder" placeholder="Перевод">
+    <input type="text" id="input-edit-card-tags" data-i18n-placeholder="card.tagsPlaceholder" placeholder="Теги через запятую (необязательно)">
     <div class="modal-actions">
       <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
       <button class="btn-brass" id="confirm-edit-card" data-i18n="card.saveBtn">Сохранить</button>
@@ -333,11 +405,39 @@
   <div class="modal" id="modal-export" role="dialog" aria-modal="true" aria-labelledby="export-modal-title" tabindex="-1" hidden>
     <h2 id="export-modal-title" data-i18n="exportModal.title">Экспорт колоды</h2>
     <p class="modal-hint" data-i18n="exportModal.hint">Скачает файл со всеми карточками активной колоды — его потом можно
-      будет снова загрузить через «Импорт файла», в этом или другом устройстве.</p>
+      будет снова загрузить через «Импорт файла», в этом или другом устройстве. Сохраняются только слова
+      и переводы; прогресс повторения (уровни карточек) не переносится.</p>
     <div class="modal-actions">
       <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
       <button class="btn-brass" id="export-as-csv" data-i18n="exportModal.csvBtn">Скачать .csv</button>
       <button class="btn-brass" id="export-as-json" data-i18n="exportModal.jsonBtn">Скачать .json</button>
+    </div>
+    <div class="overflow-divider"></div>
+    <p class="modal-hint" data-i18n="exportModal.backupHint">Полный бэкап сохраняет ещё и прогресс (уровни, даты повторения, теги) —
+      удобно для переноса на другое устройство без потери истории обучения.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="export-full-backup" data-i18n="exportModal.backupBtn">📦 Полный бэкап (.kdeck.json)</button>
+      <button class="btn-ghost" id="export-share-link" data-i18n="exportModal.shareLinkBtn">🔗 Поделиться ссылкой</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-share-link" role="dialog" aria-modal="true" aria-labelledby="share-link-title" tabindex="-1" hidden>
+    <h2 id="share-link-title" data-i18n="shareLink.title">Ссылка для передачи колоды</h2>
+    <p class="modal-hint" id="share-link-hint" data-i18n="shareLink.hint">Ссылка содержит слова, переводы и теги (без прогресса повторения) —
+      всё зашито прямо в адрес, никуда не отправляется.</p>
+    <input type="text" id="share-link-output" readonly>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Закрыть</button>
+      <button class="btn-brass" id="share-link-copy" data-i18n="shareLink.copyBtn">Скопировать ссылку</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-import-link" role="dialog" aria-modal="true" aria-labelledby="import-link-title" tabindex="-1" hidden>
+    <h2 id="import-link-title" data-i18n="shareLink.importTitle">Импортировать колоду по ссылке?</h2>
+    <p class="modal-hint" id="import-link-summary"></p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="import-link-cancel" data-i18n="common.cancel">Отмена</button>
+      <button class="btn-brass" id="import-link-confirm" data-i18n="shareLink.importBtn">Импортировать</button>
     </div>
   </div>
 

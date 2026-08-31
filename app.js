@@ -15,6 +15,7 @@ const state = {
     revealed: false,
     hasRevealedOnce: false, // была ли карточка хоть раз перевёрнута в этом показе (для печатей знал/не знал)
     sessionActive: false,   // сессия идёт — не сбрасывать на экран выбора направления при возврате на вкладку
+    deckIds: [],            // из каких колод набрана сессия (может быть несколько — режим "Учить всё")
   },
   listen: {
     speaker: null,        // экземпляр CardSpeaker
@@ -27,7 +28,12 @@ const state = {
     deleteButtonPosition: 'top',  // 'top' | 'stamps' — где показывать 🗑 в режиме "Учить"
     appLanguage: 'ru',            // 'ru' | 'en' | 'pl'
     theme: 'system',              // 'system' | 'light' | 'dark'
+    dailyGoal: 20,                 // сколько карточек в день считается выполненной целью
+    reminderEnabled: false,
+    reminderTime: '20:00',
   },
+  reminderCheckTimer: null,
+  pendingShareImport: null,       // данные колоды из #import=... в ссылке, ждущие подтверждения
 };
 
 /* ---------------------------------------------------------------------- *
@@ -154,6 +160,37 @@ function stopActiveSessions() {
   state.learn.current = null;
 }
 
+/** Обновляет плашку серии дней и полосу дневной цели (экран "Колоды"), и краткую
+ * строку прогресса на экране "Учить" — везде используется общий счётчик за сегодня. */
+async function renderDailyGoalUI() {
+  const goal = state.settings.dailyGoal;
+  const todayCount = await getTodayReviewCount();
+  const streak = (await getSetting('streak')) || { current: 0, longest: 0, lastCompletedDate: null };
+
+  const streakBadge = $('#streak-badge');
+  const streakText = $('#streak-text');
+  if (streakBadge && streakText) {
+    if (streak.current > 0) {
+      streakText.textContent = t('decks.streakText', { n: streak.current });
+      streakBadge.hidden = false;
+    } else {
+      streakBadge.hidden = true;
+    }
+  }
+
+  const goalLabel = $('#daily-goal-label');
+  const goalFill = $('#daily-goal-fill');
+  if (goalLabel && goalFill) {
+    goalLabel.textContent = t('decks.dailyGoalLabel', { count: todayCount, goal });
+    goalFill.style.width = Math.min(100, Math.round((todayCount / goal) * 100)) + '%';
+  }
+
+  const learnGoalInline = $('#learn-daily-goal-inline');
+  if (learnGoalInline) {
+    learnGoalInline.textContent = t('learn.dailyGoalProgress', { count: todayCount, goal });
+  }
+}
+
 async function renderDecks() {
   const decks = await getAllDecks();
   const activeId = await ensureActiveDeck();
@@ -214,6 +251,7 @@ async function renderDecks() {
   }
 
   $('#btn-merge-decks').disabled = decks.length < 2;
+  await renderDailyGoalUI();
 }
 
 function fillLangSelect(selectEl, selectedCode) {
@@ -333,6 +371,10 @@ async function renderCards() {
   cards.forEach((c, i) => {
     const row = document.createElement('div');
     row.className = 'entry-row';
+    const tags = c.tags || [];
+    const tagsHtml = tags.length
+      ? `<div class="entry-tags">${tags.map((tg) => `<span class="tag-chip">${escapeHtml(tg)}</span>`).join('')}</div>`
+      : '';
     row.innerHTML = `
       <span class="entry-num">${i + 1}</span>
       <span class="entry-word">${escapeHtml(c.word)}</span>
@@ -341,11 +383,12 @@ async function renderCards() {
       <span class="entry-box">${escapeHtml(t('cards.levelLabel', { n: c.box }))}</span>
       <button class="entry-edit" data-id="${c.id}">✏️</button>
       <button class="entry-del" data-id="${c.id}">✕</button>
+      ${tagsHtml}
     `;
     row.querySelector('.entry-edit').addEventListener('click', () => openEditCardModal(c));
     row.querySelector('.entry-del').addEventListener('click', () => {
       askConfirm(t('cards.deleteConfirmTitle'), `«${c.word}» → «${c.translation}»`, t('common.delete'), async () => {
-        const cardSnapshot = { deckId: c.deckId, word: c.word, translation: c.translation, box: c.box, nextReview: c.nextReview, createdAt: c.createdAt };
+        const cardSnapshot = { deckId: c.deckId, word: c.word, translation: c.translation, box: c.box, nextReview: c.nextReview, createdAt: c.createdAt, tags: c.tags };
         await deleteCard(c.id);
         renderCards();
         toast(t('cards.deletedToast'), {
@@ -370,6 +413,7 @@ function openEditCardModal(card, onSaved) {
   editCardSavedCallback = onSaved || renderCards;
   $('#input-edit-card-word').value = card.word;
   $('#input-edit-card-translation').value = card.translation;
+  $('#input-edit-card-tags').value = (card.tags || []).join(', ');
   openModal('modal-edit-card');
   setTimeout(() => $('#input-edit-card-word').focus(), 50);
 }
@@ -377,9 +421,10 @@ function openEditCardModal(card, onSaved) {
 $('#confirm-edit-card').addEventListener('click', async () => {
   const word = $('#input-edit-card-word').value.trim();
   const translation = $('#input-edit-card-translation').value.trim();
+  const tags = $('#input-edit-card-tags').value;
   if (!word || !translation) { toast(t('cards.fillBothToast')); return; }
 
-  const ok = await updateCard(editingCardId, word, translation);
+  const ok = await updateCard(editingCardId, word, translation, tags);
   closeModal();
   if (ok) {
     toast(t('cards.updatedToast'));
@@ -394,6 +439,7 @@ $('#btn-cards-overflow').addEventListener('click', () => openModal('modal-cards-
 $('#btn-add-card').addEventListener('click', () => {
   $('#input-card-word').value = '';
   $('#input-card-translation').value = '';
+  $('#input-card-tags').value = '';
   openModal('modal-add-card');
   setTimeout(() => $('#input-card-word').focus(), 50);
 });
@@ -401,9 +447,10 @@ $('#btn-add-card').addEventListener('click', () => {
 $('#confirm-add-card').addEventListener('click', async () => {
   const word = $('#input-card-word').value.trim();
   const translation = $('#input-card-translation').value.trim();
+  const tags = $('#input-card-tags').value;
   if (!word || !translation) { toast(t('cards.fillBothToast')); return; }
   const deckId = await ensureActiveDeck();
-  const added = await addCard(deckId, word, translation);
+  const added = await addCard(deckId, word, translation, tags);
   closeModal();
   toast(added ? t('cards.addedToast') : t('cards.alreadyExistsToast'));
   renderCards();
@@ -468,6 +515,28 @@ $('#import-file-input').addEventListener('change', async (e) => {
   e.target.value = '';
   if (!file) return;
   const text = await file.text();
+
+  // Полный бэкап (.kdeck.json, схема с прогрессом) — определяем по содержимому,
+  // а не по расширению файла, т.к. это тоже .json. Обычный импорт (только
+  // слово+перевод, без схемы) как работал, так и работает — веткой ниже.
+  let backupData = null;
+  try {
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{')) {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && parsed.schemaVersion && Array.isArray(parsed.cards)) backupData = parsed;
+    }
+  } catch (err) { /* не JSON или не та схема — пойдёт по обычной ветке импорта ниже */ }
+
+  if (backupData) {
+    toast(t('import.fullBackupDetected'), { duration: 3800 });
+    const deckId = await ensureActiveDeck();
+    const { added, skipped } = await importFullBackupCards(deckId, backupData.cards);
+    toast(t('import.fullBackupAddedToast', { added }) + (skipped ? t('import.skippedSuffix', { skipped }) : ''), { duration: 3800 });
+    renderCards();
+    return;
+  }
+
   let pairs = [];
   try {
     if (file.name.toLowerCase().endsWith('.json')) {
@@ -541,6 +610,161 @@ $('#export-as-csv').addEventListener('click', async () => {
   downloadFile(`${sanitizeFilename(deck.name)}.csv`, csvContent, 'text/csv');
   closeModal();
   toast(t('export.downloadedToast', { n: cards.length }), { duration: 3800 });
+});
+
+/* --- Полный бэкап (.kdeck.json) — с прогрессом (уровни, даты повторения, теги) ------- */
+
+$('#export-full-backup').addEventListener('click', async () => {
+  const deckId = await ensureActiveDeck();
+  const deck = await getDeck(deckId);
+  const cards = await getCardsByDeck(deckId);
+  const backup = {
+    schemaVersion: 1,
+    name: deck.name,
+    wordLang: deck.wordLang,
+    translationLang: deck.translationLang,
+    cards: cards.map((c) => ({
+      word: c.word, translation: c.translation, box: c.box, nextReview: c.nextReview, tags: c.tags || [],
+    })),
+    exportedAt: new Date().toISOString(),
+  };
+  downloadFile(`${sanitizeFilename(deck.name)}.kdeck.json`, JSON.stringify(backup, null, 2), 'application/json');
+  closeModal();
+  toast(t('export.backupDownloadedToast', { n: cards.length }), { duration: 3800 });
+});
+
+/* --- Шаринг колоды по ссылке (без бэкенда — данные прямо в URL) --------------------- */
+
+function arrayBufferToBase64Url(buf) {
+  let binary = '';
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlToArrayBuffer(b64url) {
+  let b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function compressToBase64Url(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
+  const buf = await new Response(stream).arrayBuffer();
+  return arrayBufferToBase64Url(buf);
+}
+
+async function decompressFromBase64Url(b64url) {
+  const buf = base64UrlToArrayBuffer(b64url);
+  const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const outBuf = await new Response(stream).arrayBuffer();
+  return JSON.parse(new TextDecoder().decode(outBuf));
+}
+
+const SHARE_LINK_MAX_LENGTH = 1800; // безопасный предел длины URL для мессенджеров/адресной строки
+
+$('#export-share-link').addEventListener('click', async () => {
+  if (typeof CompressionStream === 'undefined') {
+    toast(t('shareLink.unsupportedToast'), { duration: 3800 });
+    return;
+  }
+  const deckId = await ensureActiveDeck();
+  const deck = await getDeck(deckId);
+  const cards = await getCardsByDeck(deckId);
+  // Без прогресса — только то, что нужно, чтобы получатель мог начать учить с нуля
+  const payload = {
+    schemaVersion: 1,
+    name: deck.name,
+    wordLang: deck.wordLang,
+    translationLang: deck.translationLang,
+    cards: cards.map((c) => ({ word: c.word, translation: c.translation, tags: c.tags || [] })),
+  };
+
+  let encoded;
+  try {
+    encoded = await compressToBase64Url(payload);
+  } catch (err) {
+    toast(t('shareLink.unsupportedToast'), { duration: 3800 });
+    return;
+  }
+
+  const url = `${location.origin}${location.pathname}#import=${encoded}`;
+  if (url.length > SHARE_LINK_MAX_LENGTH) {
+    toast(t('shareLink.tooLongToast'), { duration: 4500 });
+    return;
+  }
+
+  closeModal();
+  $('#share-link-output').value = url;
+  openModal('modal-share-link');
+});
+
+$('#share-link-copy').addEventListener('click', async () => {
+  const url = $('#share-link-output').value;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (err) {
+    $('#share-link-output').select();
+    try { document.execCommand('copy'); } catch (err2) { /* совсем без буфера обмена — ссылка уже видна в поле */ }
+  }
+  toast(t('shareLink.copiedToast'));
+});
+
+/** Проверяет #import=... в адресе при открытии приложения (переход по ссылке шаринга) —
+ * данные никуда не отправляются, всё уже лежит прямо в самом URL. */
+async function checkForShareImportInUrl() {
+  const hash = location.hash;
+  if (!hash.startsWith('#import=')) return;
+  const encoded = hash.slice('#import='.length);
+  if (!encoded) return;
+
+  if (typeof DecompressionStream === 'undefined') {
+    toast(t('shareLink.unsupportedToast'), { duration: 4500 });
+    history.replaceState(null, '', location.pathname + location.search);
+    return;
+  }
+
+  let payload;
+  try {
+    payload = await decompressFromBase64Url(encoded);
+    if (!payload || !Array.isArray(payload.cards)) throw new Error('bad payload');
+  } catch (err) {
+    toast(t('shareLink.invalidToast'), { duration: 4500 });
+    history.replaceState(null, '', location.pathname + location.search);
+    return;
+  }
+
+  history.replaceState(null, '', location.pathname + location.search); // убираем hash сразу, чтобы не сработало повторно при перезагрузке
+  state.pendingShareImport = payload;
+  const wordLangLabel = t('lang.' + payload.wordLang) || payload.wordLang;
+  const trLangLabel = t('lang.' + payload.translationLang) || payload.translationLang;
+  $('#import-link-summary').textContent = t('shareLink.importSummary', {
+    name: payload.name || '—', count: payload.cards.length, wordLang: wordLangLabel, trLang: trLangLabel,
+  });
+  openModal('modal-import-link');
+}
+
+$('#import-link-cancel').addEventListener('click', () => { state.pendingShareImport = null; });
+
+$('#import-link-confirm').addEventListener('click', async () => {
+  const payload = state.pendingShareImport;
+  if (!payload) { closeModal(); return; }
+  closeModal();
+
+  const name = (payload.name || 'Imported deck').slice(0, 60);
+  const deckId = await createDeck(name, { wordLang: payload.wordLang, translationLang: payload.translationLang });
+  const cardsForImport = payload.cards.map((c) => ({ word: c.word, translation: c.translation, tags: c.tags || [] }));
+  const { added } = await importFullBackupCards(deckId, cardsForImport);
+
+  stopActiveSessions();
+  await setActiveDeck(deckId);
+  state.pendingShareImport = null;
+  toast(t('shareLink.importedToast', { name, count: added }), { duration: 3800 });
+  renderDecks();
 });
 
 function parseCsvPairs(text) {
@@ -639,10 +863,26 @@ async function renderLearnSetup() {
   $('#learn-empty').hidden = true;
   $('#learn-setup').hidden = false;
   $('#learn-deck-info').textContent = t('learn.deckInfo', { name: deck.name, due });
+  await renderDailyGoalUI();
+
+  // "Учить всё" — показываем переключатель, только если есть ещё колоды с той же языковой парой
+  const sameLangDecks = await getDecksWithSameLangPair(deck.wordLang, deck.translationLang);
+  const otherDecks = sameLangDecks.filter((d) => d.id !== deckId);
+  const allToggleRow = $('#learn-all-toggle-row');
+  const allToggle = $('#learn-all-decks-toggle');
+  if (otherDecks.length > 0) {
+    allToggleRow.hidden = false;
+  } else {
+    allToggleRow.hidden = true;
+    allToggle.checked = false;
+  }
+
+  await refreshLearnTagFilter();
+  allToggle.onchange = refreshLearnTagFilter;
 
   $all('.btn-direction').forEach((b) => (b.onclick = () => startLearnSession(b.dataset.dir)));
 
-  if (due === 0) {
+  if (due === 0 && !allToggle.checked) {
     $('#learn-setup').hidden = true;
     $('#learn-empty-text').textContent = t('learn.noDueText', { name: deck.name });
     $('#btn-learn-again').hidden = true;
@@ -650,11 +890,55 @@ async function renderLearnSetup() {
   }
 }
 
+/** Пересобирает список тегов в выпадающем списке фильтра сессии — либо только
+ * активной колоды, либо объединённо по всем колодам с тем же языком (режим "Учить всё"). */
+async function refreshLearnTagFilter() {
+  const deckId = await ensureActiveDeck();
+  const deck = await getDeck(deckId);
+  const useAll = $('#learn-all-decks-toggle').checked;
+
+  let tags;
+  if (useAll) {
+    const sameLangDecks = await getDecksWithSameLangPair(deck.wordLang, deck.translationLang);
+    const tagSet = new Set();
+    for (const d of sameLangDecks) (await getAllTagsForDeck(d.id)).forEach((tg) => tagSet.add(tg));
+    tags = [...tagSet].sort((a, b) => a.localeCompare(b));
+  } else {
+    tags = await getAllTagsForDeck(deckId);
+  }
+
+  const label = $('#learn-tag-filter-label');
+  const select = $('#learn-tag-filter');
+  if (tags.length === 0) {
+    label.hidden = true;
+    select.hidden = true;
+    select.innerHTML = '';
+    return;
+  }
+  label.hidden = false;
+  select.hidden = false;
+  select.innerHTML = `<option value="">${escapeHtml(t('learn.tagFilterAll'))}</option>`
+    + tags.map((tg) => `<option value="${escapeHtml(tg)}">${escapeHtml(tg)}</option>`).join('');
+}
+
 async function startLearnSession(mode) {
   const deckId = await ensureActiveDeck();
   const deck = await getDeck(deckId);
-  const { due: trueDueCount } = await countCards(deckId);
-  const due = await getDueCards(deckId, 20);
+  const useAllDecks = $('#learn-all-decks-toggle').checked && !$('#learn-all-toggle-row').hidden;
+  const tagFilter = $('#learn-tag-filter').hidden ? null : ($('#learn-tag-filter').value || null);
+
+  let due, deckIds, trueDueCount;
+  if (useAllDecks) {
+    const sameLangDecks = await getDecksWithSameLangPair(deck.wordLang, deck.translationLang);
+    deckIds = sameLangDecks.map((d) => d.id);
+    due = await getDueCardsAcrossDecks(deckIds, 20, tagFilter);
+    trueDueCount = due.length; // для мультиколодного режима считаем точно, без отдельного тяжёлого подсчёта
+  } else {
+    deckIds = [deckId];
+    const counts = await countCards(deckId);
+    trueDueCount = counts.due;
+    due = await getDueCards(deckId, 20, tagFilter);
+  }
   if (due.length === 0) { renderLearnSetup(); return; }
 
   const ids = due.map((c) => c.id);
@@ -663,7 +947,8 @@ async function startLearnSession(mode) {
     directions[id] = mode === 'mix' ? (Math.random() < 0.5 ? 'wt' : 'tw') : mode;
   }
 
-  state.learn.deck = deck;
+  state.learn.deck = deck; // используется для языков озвучки — у всех колод в наборе он одинаковый
+  state.learn.deckIds = deckIds;
   state.learn.queue = ids;
   state.learn.directions = directions;
   state.learn.sessionTotal = ids.length;
@@ -705,7 +990,7 @@ async function showNextCard() {
   const frontLang = direction === 'tw' ? translationLang : wordLang;
   const backLang = direction === 'tw' ? wordLang : translationLang;
 
-  state.learn.current = { id: cardId, front, back, frontLang, backLang };
+  state.learn.current = { id: cardId, deckId: card.deckId, front, back, frontLang, backLang };
   state.learn.revealed = false;
   state.learn.hasRevealedOnce = false;
 
@@ -771,10 +1056,16 @@ async function answerCurrent(correct) {
   // Интервал повторения обновляем только по ПЕРВОЙ попытке за сессию —
   // иначе при "повторяем, пока не выучишь" итог всегда почти положительный
   // (последний ответ), и по-настоящему сложные слова не отличались бы от
-  // выученных с первого раза.
-  if (!state.learn.scoredCards.has(cur.id)) {
+  // выученных с первого раза. Тот же момент — единственно верный для записи
+  // в журнал ответов (retention/heatmap/дневная цель): считаем реальные
+  // попытки вспомнить слово, а не технические повторы одной и той же карточки.
+  const isFirstAttempt = !state.learn.scoredCards.has(cur.id);
+  let streakInfo = null;
+  if (isFirstAttempt) {
     await updateCardProgress(cur.id, correct);
+    await logReview(cur.id, cur.deckId, correct);
     state.learn.scoredCards.add(cur.id);
+    streakInfo = await updateStreakIfGoalReached(state.settings.dailyGoal);
   }
 
   const { queue } = state.learn;
@@ -782,7 +1073,15 @@ async function answerCurrent(correct) {
     queue.shift();
     if (!correct) queue.push(cur.id); // не знал — вернём в конец очереди
   }
-  toast(correct ? t('learn.answerKnowToast') : t('learn.answerDontKnowToast'));
+
+  // Оба тоста одновременно не поместятся (второй вызов toast() тут же
+  // перекроет первый) — приоритет отдаём редкому и приятному поздравлению
+  // со стриком, обычный тост ответа в этом случае просто пропускаем.
+  if (streakInfo && streakInfo.justCompleted) {
+    toast(t('decks.streakText', { n: streakInfo.streak.current }), { duration: 3800 });
+  } else {
+    toast(correct ? t('learn.answerKnowToast') : t('learn.answerDontKnowToast'));
+  }
   await showNextCard();
 }
 
@@ -1014,7 +1313,7 @@ $('#listen-delete-btn').addEventListener('click', () => {
 
   const doDelete = async () => {
     const deck = state.listen.deck;
-    const cardSnapshot = { deckId: card.deckId, word: card.word, translation: card.translation, box: card.box, nextReview: card.nextReview, createdAt: card.createdAt };
+    const cardSnapshot = { deckId: card.deckId, word: card.word, translation: card.translation, box: card.box, nextReview: card.nextReview, createdAt: card.createdAt, tags: card.tags };
     await deleteCard(card.id);
     const wasCurrent = speaker.removeCard(card.id);
     toast(t('listen.deletedToast'), {
@@ -1067,6 +1366,66 @@ async function renderStats() {
     <div class="stat-row"><span class="stat-label">${escapeHtml(t('stats.totalLabel'))}</span><span class="stat-value">${total}</span></div>
     <div class="stat-row"><span class="stat-label">${escapeHtml(t('stats.dueLabel'))}</span><span class="stat-value">${due}</span></div>
   `;
+
+  // --- Прогноз ---
+  const forecast = await getForecastBuckets(deckId);
+  const forecastItems = [
+    ['stats.forecastToday', forecast.today],
+    ['stats.forecastTomorrow', forecast.tomorrow],
+    ['stats.forecastWeek', forecast.week],
+    ['stats.forecastMonth', forecast.month],
+    ['stats.forecastLater', forecast.later],
+  ];
+  $('#forecast-row').innerHTML = forecastItems.map(([key, n]) => `
+    <div class="forecast-chip">
+      <span class="forecast-chip-value">${n}</span>
+      <span class="forecast-chip-label">${escapeHtml(t(key))}</span>
+    </div>
+  `).join('');
+
+  // --- Retention ---
+  const ret7 = await getRetention(deckId, 7);
+  const ret30 = await getRetention(deckId, 30);
+  const renderRetentionValue = (r) => r.rate === null
+    ? t('stats.retentionNoData')
+    : t('stats.retentionValue', { rate: Math.round(r.rate * 100), correct: r.correct, total: r.total });
+  $('#retention-row').innerHTML = `
+    <div class="retention-item"><span class="retention-period">${escapeHtml(t('stats.retention7d'))}</span><span class="retention-value">${escapeHtml(renderRetentionValue(ret7))}</span></div>
+    <div class="retention-item"><span class="retention-period">${escapeHtml(t('stats.retention30d'))}</span><span class="retention-value">${escapeHtml(renderRetentionValue(ret30))}</span></div>
+  `;
+
+  // --- Распределение по уровням ---
+  const dist = await getBoxDistribution(deckId);
+  const maxLevelCount = Math.max(1, ...dist);
+  $('#levels-bar').innerHTML = dist.map((n, level) => `
+    <div class="level-row">
+      <span class="level-label">${level}</span>
+      <div class="level-track"><div class="level-fill" style="width:${Math.round((n / maxLevelCount) * 100)}%"></div></div>
+      <span class="level-count">${n}</span>
+    </div>
+  `).join('');
+
+  // --- Heatmap активности за 90 дней ---
+  const heatmapData = await getHeatmapData(deckId, 90);
+  const hasAnyActivity = Object.keys(heatmapData).length > 0;
+  const heatmapGrid = $('#heatmap-grid');
+  if (!hasAnyActivity) {
+    heatmapGrid.innerHTML = `<p class="heatmap-empty">${escapeHtml(t('stats.heatmapEmpty'))}</p>`;
+  } else {
+    const maxCount = Math.max(1, ...Object.values(heatmapData));
+    const days = 90;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cells = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 86400000);
+      const key = dayKey(d);
+      const count = heatmapData[key] || 0;
+      const level = count === 0 ? 0 : Math.min(4, Math.ceil((count / maxCount) * 4));
+      cells.push(`<div class="heatmap-cell" data-level="${level}" title="${key}: ${count}"></div>`);
+    }
+    heatmapGrid.innerHTML = cells.join('');
+  }
 }
 
 /* ---------------------------------------------------------------------- *
@@ -1078,10 +1437,16 @@ async function loadSettings() {
   const delPos = await getSetting('deleteButtonPosition');
   const appLang = await getSetting('appLanguage');
   const theme = await getSetting('theme');
+  const dailyGoal = await getSetting('dailyGoal');
+  const reminderEnabled = await getSetting('reminderEnabled');
+  const reminderTime = await getSetting('reminderTime');
   state.settings.confirmDeleteCard = confirmDelete === null ? true : !!confirmDelete;
   state.settings.deleteButtonPosition = delPos === null ? 'top' : delPos;
   state.settings.appLanguage = appLang === null ? 'ru' : appLang;
   state.settings.theme = theme === null ? 'system' : theme;
+  state.settings.dailyGoal = (dailyGoal === null || !Number.isFinite(dailyGoal) || dailyGoal < 1) ? 20 : dailyGoal;
+  state.settings.reminderEnabled = reminderEnabled === null ? false : !!reminderEnabled;
+  state.settings.reminderTime = reminderTime === null ? '20:00' : reminderTime;
   setLang(state.settings.appLanguage);
   applyTheme(state.settings.theme);
 }
@@ -1115,6 +1480,94 @@ function renderSettingsView() {
   $('#setting-theme-system').checked = state.settings.theme === 'system';
   $('#setting-theme-light').checked = state.settings.theme === 'light';
   $('#setting-theme-dark').checked = state.settings.theme === 'dark';
+  $('#setting-daily-goal').value = state.settings.dailyGoal;
+  $('#setting-reminder-enabled').checked = state.settings.reminderEnabled;
+  $('#setting-reminder-time').value = state.settings.reminderTime;
+  renderNotificationStatusHint();
+}
+
+function renderNotificationStatusHint() {
+  const hint = $('#notification-status-hint');
+  if (!hint) return;
+  if (typeof Notification === 'undefined') {
+    hint.textContent = t('notifications.unsupported');
+  } else if (Notification.permission === 'granted') {
+    hint.textContent = t('notifications.granted');
+  } else if (Notification.permission === 'denied') {
+    hint.textContent = t('notifications.denied');
+  } else {
+    hint.textContent = t('notifications.default');
+  }
+}
+
+$('#setting-daily-goal').addEventListener('change', async (e) => {
+  const val = Math.max(1, Math.min(500, parseInt(e.target.value, 10) || 20));
+  state.settings.dailyGoal = val;
+  e.target.value = val;
+  await setSetting('dailyGoal', val);
+  renderDailyGoalUI();
+});
+
+$('#setting-reminder-enabled').addEventListener('change', async (e) => {
+  state.settings.reminderEnabled = e.target.checked;
+  await setSetting('reminderEnabled', e.target.checked);
+  scheduleReminderChecks();
+});
+
+$('#setting-reminder-time').addEventListener('change', async (e) => {
+  state.settings.reminderTime = e.target.value || '20:00';
+  await setSetting('reminderTime', state.settings.reminderTime);
+});
+
+$('#btn-request-notifications').addEventListener('click', async () => {
+  if (typeof Notification === 'undefined') { renderNotificationStatusHint(); return; }
+  try {
+    await Notification.requestPermission();
+  } catch (err) { /* пользователь закрыл диалог и т.п. — молча игнорируем */ }
+  renderNotificationStatusHint();
+});
+
+/**
+ * Раз в минуту проверяет, не наступило ли время напоминания — и если да
+ * (и уведомления разрешены, и сегодня ещё не показывали) — показывает
+ * уведомление "Пора повторить N карточек". Работает только пока страница
+ * открыта (хотя бы в фоновой вкладке) — без сервера настоящий push для
+ * закрытого приложения на iOS невозможен.
+ */
+function scheduleReminderChecks() {
+  if (state.reminderCheckTimer) { clearInterval(state.reminderCheckTimer); state.reminderCheckTimer = null; }
+  if (!state.settings.reminderEnabled) return;
+  const check = () => checkReminderDue();
+  check();
+  state.reminderCheckTimer = setInterval(check, 60 * 1000);
+}
+
+async function checkReminderDue() {
+  if (!state.settings.reminderEnabled) return;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+
+  const now = new Date();
+  const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  if (hhmm !== state.settings.reminderTime) return;
+
+  const todayKey = dayKey(now);
+  const lastFired = await getSetting('reminderLastFiredDay');
+  if (lastFired === todayKey) return; // уже показывали сегодня
+
+  const deckId = await ensureActiveDeck();
+  const { due } = await countCards(deckId);
+  if (due === 0) return; // нечего повторять — не дёргаем пользователя зря
+
+  await setSetting('reminderLastFiredDay', todayKey);
+  const title = t('app.title');
+  const body = t('notifications.reminderFired', { n: due });
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg && reg.showNotification) { await reg.showNotification(title, { body, icon: 'icons/icon-192.png' }); return; }
+    }
+    new Notification(title, { body, icon: 'icons/icon-192.png' });
+  } catch (err) { /* уведомления могут быть недоступны в этот момент — просто пропускаем */ }
 }
 
 /** Показывает верхние/нижние кнопки удаления и редактирования согласно настройке и состоянию карточки. */
@@ -1205,6 +1658,8 @@ async function initApp() {
   applyStaticTranslations();
   applyDeleteButtonPosition();
   showView('decks');
+  scheduleReminderChecks();
+  checkForShareImportInUrl();
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js').catch(() => {});
