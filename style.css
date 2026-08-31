@@ -523,6 +523,7 @@ button:disabled {
 
 .card-stage {
   perspective: 1400px;
+  -webkit-perspective: 1400px;
   display: flex;
   justify-content: center;
   padding: 8px 0 30px;
@@ -536,6 +537,8 @@ button:disabled {
   border-radius: var(--radius-lg);
   padding: 34px 28px;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  will-change: transform;
   transition: transform .5s cubic-bezier(.4, .2, .2, 1);
   cursor: pointer;
 }
@@ -561,17 +564,22 @@ button:disabled {
   line-height: 1.4;
   word-break: break-word;
 }
-.card-front { font-weight: 700; color: var(--text-primary); }
-.card-back { color: var(--accent); font-weight: 600; transform: rotateY(180deg); }
+/* Явный (пусть и нулевой) transform на лицевой стороне — иначе мобильный
+   Safari иногда не успевает применить backface-visibility ДО начала анимации
+   поворота, и обратная сторона на долю секунды "просвечивает" сквозь лицевую
+   прямо посреди вращения. */
+.card-front { font-weight: 700; color: var(--text-primary); transform: rotateY(0deg); -webkit-transform: rotateY(0deg); }
+.card-back { color: var(--accent); font-weight: 600; transform: rotateY(180deg); -webkit-transform: rotateY(180deg); }
 
 /* карточка перевёрнута целиком — а декоративные элементы (дырочка, кнопка
    озвучки, подсказка) компенсирующе повёрнуты обратно, чтобы не отражаться
    зеркально и оставаться читаемыми в обеих фазах анимации */
-#flip-card.is-flipped { transform: rotateY(180deg); }
+#flip-card.is-flipped { transform: rotateY(180deg); -webkit-transform: rotateY(180deg); }
 #flip-card.is-flipped .card-hole,
 #flip-card.is-flipped .card-speak-btn,
 #flip-card.is-flipped .card-tap-hint {
   transform: rotateY(180deg);
+  -webkit-transform: rotateY(180deg);
 }
 
 .index-card:active { transform: scale(.985); }
@@ -1151,9 +1159,14 @@ button:disabled {
    ========================================================================== */
 
 @media (prefers-reduced-motion: reduce) {
-  *, .view, .modal, .toast, .index-card, .card-face, .card-hole, .card-speak-btn,
+  *, .view, .modal, .toast, .card-hole, .card-speak-btn,
   .card-tap-hint, .stamp, .tab-btn svg {
     animation: none !important;
     transition: none !important;
   }
+  /* Переворот карточки — не декоративная анимация, а обратная связь на
+     основное действие ("что произошло, когда я нажал"), поэтому полностью
+     убирать её не стоит — иначе слово и перевод будут мгновенно и незаметно
+     подменять друг друга. Вместо этого делаем её короче и без "пружины". */
+  .index-card { transition: transform .15s linear !important; }
 }
