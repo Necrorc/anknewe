@@ -58,6 +58,9 @@
     <button class="btn-tab-new btn-tab-new--secondary" id="btn-merge-decks" data-i18n="decks.mergeDecks">
       🔗 Объединить колоды
     </button>
+    <button class="btn-tab-new btn-tab-new--secondary" id="btn-export-all-decks" data-i18n="decks.exportAllBtn">
+      📦 Экспортировать всё
+    </button>
   </section>
 
   <!-- ===================== ЭКРАН: КАРТОЧКИ (список активной колоды) ===================== -->
@@ -285,6 +288,7 @@
         <span data-i18n="settings.reminderEnable">Включить напоминание</span>
       </label>
       <input type="time" id="setting-reminder-time" class="modal-select" value="20:00">
+      <p class="settings-hint" data-i18n="settings.reminderTimeHint">Точнее всего работает, если приложение открыто в фоне примерно в это время.</p>
       <button class="btn-ghost btn-wide" id="btn-request-notifications" data-i18n="settings.requestPermission">Разрешить уведомления</button>
       <p class="settings-hint" id="notification-status-hint"></p>
       <p class="settings-hint" data-i18n="settings.reminderHint">Работает, пока приложение открыто хотя бы в фоновой вкладке —
@@ -363,6 +367,7 @@
     <h2 id="cards-overflow-title" data-i18n="cards.moreActionsTitle">Ещё действия</h2>
     <button class="overflow-item" id="btn-export-cards" data-i18n="cards.export">Экспорт</button>
     <button class="overflow-item" id="btn-dedup" data-i18n="cards.dedup">Убрать дубли</button>
+    <button class="overflow-item" id="btn-merge-similar" data-i18n="cards.mergeSimilar">Совместить похожие</button>
     <button class="overflow-item" id="btn-reset-levels" data-i18n="cards.resetLevels">Сбросить уровни</button>
     <div class="overflow-divider"></div>
     <button class="overflow-item overflow-item--danger" id="btn-delete-all" data-i18n="cards.clearDeck">Очистить колоду</button>

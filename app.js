@@ -62,7 +62,7 @@ let toastTimer = null;
  * появится кнопка отмены действия (например, восстановление удалённой карточки),
  * и он покажется на более долгий срок автоматически (если duration не задан явно).
  */
-function toast(msg, { duration, undoLabel, onUndo } = {}) {
+function toast(msg, { duration, undoLabel, onUndo, actionLabel, onAction } = {}) {
   const el = $('#toast');
   clearTimeout(toastTimer);
   el.innerHTML = '';
@@ -71,20 +71,22 @@ function toast(msg, { duration, undoLabel, onUndo } = {}) {
   text.textContent = msg;
   el.appendChild(text);
 
-  if (undoLabel && onUndo) {
+  const label = actionLabel || undoLabel;
+  const handler = onAction || onUndo;
+  if (label && handler) {
     const btn = document.createElement('button');
     btn.className = 'toast-undo-btn';
-    btn.textContent = undoLabel;
+    btn.textContent = label;
     btn.addEventListener('click', () => {
       clearTimeout(toastTimer);
       el.classList.remove('is-visible');
-      onUndo();
+      handler();
     });
     el.appendChild(btn);
   }
 
   el.classList.add('is-visible');
-  const finalDuration = duration || (undoLabel ? 6500 : 2200);
+  const finalDuration = duration || (label ? 6500 : 2200);
   toastTimer = setTimeout(() => el.classList.remove('is-visible'), finalDuration);
 }
 
@@ -231,10 +233,24 @@ async function renderDecks() {
         t('common.delete'),
         async () => {
           stopActiveSessions();
+          // снимок колоды и всех её карточек — на случай отмены через тост
+          const cardsSnapshot = await getCardsByDeck(d.id);
+          const deckSnapshot = { name: d.name, wordLang: d.wordLang, translationLang: d.translationLang, color: d.color };
+
           await deleteDeck(d.id);
           await ensureActiveDeck();
-          toast(t('decks.deletedToast', { name: d.name }));
           renderDecks();
+          toast(t('decks.deletedToast', { name: d.name }), {
+            undoLabel: t('common.undo'),
+            onUndo: async () => {
+              const newDeckId = await createDeck(deckSnapshot.name, deckSnapshot);
+              await importFullBackupCards(newDeckId, cardsSnapshot);
+              stopActiveSessions();
+              await setActiveDeck(newDeckId);
+              toast(t('decks.restoredToast', { name: deckSnapshot.name }));
+              renderDecks();
+            },
+          });
         }
       );
     });
@@ -340,12 +356,33 @@ $('#confirm-merge-decks').addEventListener('click', async () => {
     t('merge.confirmBtn'),
     async () => {
       stopActiveSessions();
-      const { moved, skipped } = await mergeDecks(sourceId, targetId);
+      const { moved, skipped, mergedGroups } = await mergeDecks(sourceId, targetId);
       await ensureActiveDeck();
-      toast(t('merge.doneToast', { moved }) + (skipped ? t('merge.doneSkippedSuffix', { skipped }) : ''), { duration: 3800 });
+      let msg = t('merge.doneToast', { moved }) + (skipped ? t('merge.doneSkippedSuffix', { skipped }) : '');
+      if (mergedGroups > 0) msg += ' ' + t('cards.mergeSimilarAutoToast', { groups: mergedGroups });
+      toast(msg, { duration: 4500 });
       renderDecks();
     }
   );
+});
+
+/* --- Экспорт всех колод сразу (один файл, с прогрессом) --------------------- */
+
+$('#btn-export-all-decks').addEventListener('click', async () => {
+  const decks = await getAllDecks();
+  if (decks.length === 0) { toast(t('decks.noDecksToExportToast')); return; }
+
+  const decksData = [];
+  for (const d of decks) {
+    const cards = await getCardsByDeck(d.id);
+    decksData.push({
+      name: d.name, wordLang: d.wordLang, translationLang: d.translationLang, color: d.color,
+      cards: cards.map((c) => ({ word: c.word, translation: c.translation, box: c.box, nextReview: c.nextReview, tags: c.tags || [] })),
+    });
+  }
+  const backup = { schemaVersion: 1, decks: decksData, exportedAt: new Date().toISOString() };
+  downloadFile('all-decks-backup.kdeck.json', JSON.stringify(backup, null, 2), 'application/json');
+  toast(t('export.allDecksDownloadedToast', { n: decks.length }), { duration: 3800 });
 });
 
 /* ---------------------------------------------------------------------- *
@@ -464,6 +501,36 @@ $('#btn-dedup').addEventListener('click', async () => {
   renderCards();
 });
 
+$('#btn-merge-similar').addEventListener('click', () => {
+  closeModal();
+  askConfirm(
+    t('cards.mergeSimilarConfirmTitle'),
+    t('cards.mergeSimilarConfirmText'),
+    t('cards.mergeSimilarBtn'),
+    async () => {
+      const deckId = await ensureActiveDeck();
+      const cardsSnapshot = await getCardsByDeck(deckId); // для полной отмены через тост
+      const { mergedGroups, removedCards } = await mergeSimilarCards(deckId);
+      renderCards();
+
+      if (mergedGroups === 0) {
+        toast(t('cards.mergeSimilarNoneToast'));
+        return;
+      }
+      toast(t('cards.mergeSimilarDoneToast', { groups: mergedGroups, removed: removedCards }), {
+        duration: 6500,
+        undoLabel: t('common.undo'),
+        onUndo: async () => {
+          await deleteAllCardsInDeck(deckId);
+          await importFullBackupCards(deckId, cardsSnapshot);
+          toast(t('cards.restoredAfterMergeToast'));
+          renderCards();
+        },
+      });
+    }
+  );
+});
+
 $('#btn-reset-levels').addEventListener('click', async () => {
   const deckId = await ensureActiveDeck();
   const { total } = await countCards(deckId);
@@ -499,9 +566,18 @@ $('#btn-delete-all').addEventListener('click', async () => {
     t('cards.clearConfirmText', { count: total, name: deck.name }),
     t('cards.clearBtn'),
     async () => {
+      const cardsSnapshot = await getCardsByDeck(deckId);
       const n = await deleteAllCardsInDeck(deckId);
-      toast(t('cards.clearedToast', { n }), { duration: 3800 });
       renderCards();
+      toast(t('cards.clearedToast', { n }), {
+        duration: 6500,
+        undoLabel: t('common.undo'),
+        onUndo: async () => {
+          const { added } = await importFullBackupCards(deckId, cardsSnapshot);
+          toast(t('cards.restoredAllToast', { n: added }));
+          renderCards();
+        },
+      });
     }
   );
 });
@@ -516,17 +592,28 @@ $('#import-file-input').addEventListener('change', async (e) => {
   if (!file) return;
   const text = await file.text();
 
-  // Полный бэкап (.kdeck.json, схема с прогрессом) — определяем по содержимому,
-  // а не по расширению файла, т.к. это тоже .json. Обычный импорт (только
-  // слово+перевод, без схемы) как работал, так и работает — веткой ниже.
+  // Бэкап СРАЗУ ВСЕХ колод ({ decks: [...] }) и полный бэкап ОДНОЙ колоды
+  // ({ cards: [...] }) — оба тоже .json, определяем по содержимому, а не
+  // по расширению. Обычный импорт (только слово+перевод, без схемы) как
+  // работал, так и работает — веткой ниже.
+  let allDecksData = null;
   let backupData = null;
   try {
     const trimmed = text.trim();
     if (trimmed.startsWith('{')) {
       const parsed = JSON.parse(trimmed);
-      if (parsed && parsed.schemaVersion && Array.isArray(parsed.cards)) backupData = parsed;
+      if (parsed && parsed.schemaVersion && Array.isArray(parsed.decks)) allDecksData = parsed;
+      else if (parsed && parsed.schemaVersion && Array.isArray(parsed.cards)) backupData = parsed;
     }
   } catch (err) { /* не JSON или не та схема — пойдёт по обычной ветке импорта ниже */ }
+
+  if (allDecksData) {
+    toast(t('import.allDecksDetected'), { duration: 3800 });
+    const { decksCount, cardsAdded } = await importAllDecksBackup(allDecksData.decks);
+    toast(t('import.allDecksAddedToast', { decks: decksCount, cards: cardsAdded }), { duration: 3800 });
+    renderDecks();
+    return;
+  }
 
   if (backupData) {
     toast(t('import.fullBackupDetected'), { duration: 3800 });
@@ -556,8 +643,10 @@ $('#import-file-input').addEventListener('change', async (e) => {
     return;
   }
   const deckId = await ensureActiveDeck();
-  const { added, skipped } = await addCardsBulk(deckId, pairs);
-  toast(t('import.addedToast', { added }) + (skipped ? t('import.skippedSuffix', { skipped }) : ''), { duration: 3800 });
+  const { added, skipped, mergedGroups } = await addCardsBulk(deckId, pairs);
+  let importMsg = t('import.addedToast', { added }) + (skipped ? t('import.skippedSuffix', { skipped }) : '');
+  if (mergedGroups > 0) importMsg += ' ' + t('cards.mergeSimilarAutoToast', { groups: mergedGroups });
+  toast(importMsg, { duration: 4500 });
   renderCards();
 });
 
@@ -1676,8 +1765,40 @@ async function initApp() {
   checkForShareImportInUrl();
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+    navigator.serviceWorker.register('service-worker.js').then((reg) => {
+      // если новая версия уже готова и ждёт (например, установилась, пока вкладка была свёрнута)
+      if (reg.waiting && navigator.serviceWorker.controller) showUpdateToast(reg);
+
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          // "installed" + уже есть controller => это обновление уже РАБОТАВШЕЙ вкладки,
+          // а не первая установка "с нуля" (тогда controller ещё пуст)
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateToast(reg);
+          }
+        });
+      });
+    }).catch(() => {});
+
+    let reloadedAfterUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloadedAfterUpdate) return;
+      reloadedAfterUpdate = true;
+      window.location.reload();
+    });
   }
+}
+
+function showUpdateToast(reg) {
+  toast(t('app.updateAvailable'), {
+    duration: 15000, // это важное уведомление — даём заметно больше времени на реакцию, чем обычным тостам
+    actionLabel: t('app.updateNow'),
+    onAction: () => {
+      if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    },
+  });
 }
 
 function showStorageError() {

@@ -5,7 +5,7 @@
  * хранятся отдельно, в IndexedDB — сервис-воркер их не касается.
  */
 
-const CACHE_NAME = 'flashcards-pwa-v19';
+const CACHE_NAME = 'flashcards-pwa-v21';
 
 const ASSETS = [
   './',
@@ -27,8 +27,16 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
+    // Раньше здесь был автоматический self.skipWaiting() — но это означало,
+    // что новая версия тихо подхватывала управление ещё до того, как
+    // пользователь узнавал об обновлении. Теперь новый воркер ждёт явной
+    // команды из вкладки (после того как человек нажмёт "Обновить" в тосте) —
+    // см. обработчик message ниже и showUpdateToast() в app.js.
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

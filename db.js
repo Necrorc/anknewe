@@ -121,7 +121,7 @@ async function createDeck(name, opts = {}) {
   const t = await tx('decks', 'readwrite');
   const store = t.objectStore('decks');
   const existingCount = await reqToPromise(store.count());
-  const color = DECK_COLOR_PALETTE[existingCount % DECK_COLOR_PALETTE.length];
+  const color = opts.color || DECK_COLOR_PALETTE[existingCount % DECK_COLOR_PALETTE.length];
   const id = await reqToPromise(store.add({
     name: name.trim().slice(0, 60),
     wordLang: opts.wordLang || 'pl-PL',
@@ -157,12 +157,14 @@ async function deleteDeck(deckId) {
  * Возвращает { moved, skipped }.
  */
 async function mergeDecks(sourceId, targetId) {
-  if (sourceId === targetId) return { moved: 0, skipped: 0 };
+  if (sourceId === targetId) return { moved: 0, skipped: 0, mergedGroups: 0 };
   const sourceCards = await getCardsByDeck(sourceId);
   const pairs = sourceCards.map((c) => [c.word, c.translation]);
-  const { added, skipped } = await addCardsBulk(targetId, pairs);
+  // addCardsBulk сама сводит похожие карточки (общее слово/перевод) в конце —
+  // этого достаточно и для сценария объединения двух колод.
+  const { added, skipped, mergedGroups } = await addCardsBulk(targetId, pairs);
   await deleteDeck(sourceId);
-  return { moved: added, skipped };
+  return { moved: added, skipped, mergedGroups };
 }
 
 async function getSetting(key) {
@@ -253,13 +255,18 @@ async function addCardsBulk(deckId, pairs) {
     seenInBatch.add(key);
     toInsert.push({ deckId, word, translation, box: 0, nextReview: n, createdAt: n });
   }
+  let mergedGroups = 0;
   if (toInsert.length) {
     const t = await tx('cards', 'readwrite');
     const store = t.objectStore('cards');
     for (const c of toInsert) store.add(c);
     await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+    // Обычный импорт CSV/JSON часто приносит и разные переводы уже известного
+    // слова, и разные слова с уже известным переводом — сразу сводим такие
+    // в одну карточку с нумерованными значениями, а не оставляем как есть.
+    ({ mergedGroups } = await mergeSimilarCards(deckId));
   }
-  return { added: toInsert.length, skipped };
+  return { added: toInsert.length, skipped, mergedGroups };
 }
 
 async function deleteCard(id) {
@@ -317,6 +324,115 @@ async function deleteAllCardsInDeck(deckId) {
   return cards.length;
 }
 
+/** Форматирует список значений как нумерованный список "1. x\n2. y\n...". */
+function formatNumberedValues(values) {
+  return values.map((v, i) => `${i + 1}. ${v}`).join('\n');
+}
+
+/**
+ * Обратная операция: если строка уже похожа на нумерованный список
+ * ("1. x\n2. y\n..."), возвращает массив исходных значений; иначе — массив
+ * из одного элемента (сама строка). Нужна, чтобы повторное слияние (например,
+ * при последующем объединении колод) не заворачивало уже объединённое
+ * значение в дополнительный уровень нумерации.
+ */
+function parseNumberedValues(str) {
+  const lines = String(str).split('\n');
+  if (lines.length < 2) return [str];
+  const matches = lines.map((line) => line.match(/^\d+\.\s(.*)$/));
+  if (matches.every((m) => m !== null)) return matches.map((m) => m[1]);
+  return [str];
+}
+
+/**
+ * Объединяет в колоде карточки с ОДИНАКОВЫМ словом, но разными переводами
+ * (перевод становится нумерованным списком "1. .. 2. .."), а также карточки
+ * с одинаковым переводом, но разными словами (аналогично — слово становится
+ * нумерованным списком). Точные дубли (совпадает и слово, и перевод) эта
+ * функция не трогает — для них есть dedupDeck.
+ *
+ * "Выживает" самая старая карточка группы (наименьший id); уровень (box)
+ * объединённой карточки — минимальный среди группы (осторожная оценка: раз
+ * значений теперь несколько, значит объём для запоминания вырос), дата
+ * следующего повторения — самая ранняя из группы; теги объединяются.
+ *
+ * Возвращает { mergedGroups, removedCards }.
+ */
+async function mergeSimilarCards(deckId) {
+  const cards = await getCardsByDeck(deckId); // уже отсортированы по id
+  const cardsById = new Map(cards.map((c) => [c.id, c]));
+
+  const toDeleteIds = new Set();
+  const updates = new Map(); // id -> { word, translation, box, nextReview, tags }
+  let mergedGroups = 0;
+
+  function mergeGroup(group, sharedField, otherField) {
+    // group уже отсортирована по id (т.к. исходный массив cards был отсортирован)
+    const survivor = group[0];
+    // Разворачиваем уже объединённые значения обратно в отдельные пункты —
+    // иначе повторное слияние задваивало бы нумерацию ("1. 1. берег...").
+    const allValues = group.flatMap((c) => parseNumberedValues(c[otherField]));
+    const distinctOther = [...new Set(allValues)];
+    const mergedTags = [...new Set(group.flatMap((c) => c.tags || []))];
+    const minBox = Math.min(...group.map((c) => c.box || 0));
+    const earliestNextReview = group.reduce(
+      (min, c) => (new Date(c.nextReview) < new Date(min) ? c.nextReview : min),
+      group[0].nextReview
+    );
+    updates.set(survivor.id, {
+      [sharedField]: survivor[sharedField],
+      [otherField]: distinctOther.length > 1 ? formatNumberedValues(distinctOther) : distinctOther[0],
+      box: minBox,
+      nextReview: earliestNextReview,
+      tags: mergedTags,
+    });
+    for (const c of group) if (c.id !== survivor.id) toDeleteIds.add(c.id);
+    mergedGroups++;
+  }
+
+  // --- Шаг 1: группировка по слову — разные переводы одного слова ---
+  const byWord = new Map();
+  for (const c of cards) {
+    if (!byWord.has(c.word)) byWord.set(c.word, []);
+    byWord.get(c.word).push(c);
+  }
+  for (const group of byWord.values()) {
+    const distinctTranslations = new Set(group.map((c) => c.translation));
+    if (group.length > 1 && distinctTranslations.size > 1) mergeGroup(group, 'word', 'translation');
+  }
+
+  // --- Шаг 2: группировка ОСТАВШИХСЯ (после шага 1) карточек по переводу ---
+  const remaining = cards.filter((c) => !toDeleteIds.has(c.id));
+  const byTranslation = new Map();
+  for (const c of remaining) {
+    // если карточка уже обновлена на шаге 1, группируем по её НОВОМУ переводу
+    const effectiveTranslation = updates.has(c.id) ? updates.get(c.id).translation : c.translation;
+    if (!byTranslation.has(effectiveTranslation)) byTranslation.set(effectiveTranslation, []);
+    byTranslation.get(effectiveTranslation).push({ ...c, translation: effectiveTranslation, word: updates.has(c.id) ? updates.get(c.id).word : c.word });
+  }
+  for (const group of byTranslation.values()) {
+    const distinctWords = new Set(group.map((c) => c.word));
+    // пропускаем карточки, уже объединённые на шаге 1 (у них составное значение
+    // в word/translation — сравнивать их дальше по слову смысла не имеет)
+    if (group.length > 1 && distinctWords.size > 1 && !group.some((c) => updates.has(c.id))) {
+      mergeGroup(group, 'translation', 'word');
+    }
+  }
+
+  if (updates.size || toDeleteIds.size) {
+    const t = await tx('cards', 'readwrite');
+    const store = t.objectStore('cards');
+    for (const [id, patch] of updates) {
+      const original = cardsById.get(id);
+      if (original) store.put({ ...original, ...patch });
+    }
+    for (const id of toDeleteIds) store.delete(id);
+    await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+  }
+
+  return { mergedGroups, removedCards: toDeleteIds.size };
+}
+
 async function dedupDeck(deckId) {
   const cards = await getCardsByDeck(deckId); // уже отсортированы по id (= по времени добавления)
   const seen = new Set();
@@ -355,15 +471,26 @@ async function getDueCards(deckId, limit = 20, tag = null) {
   return due.slice(0, limit);
 }
 
+/**
+ * Чистая функция SM-2 lite: по текущему уровню карточки и результату ответа
+ * считает новый уровень и дату следующего повторения. Не трогает БД —
+ * специально вынесена отдельно, чтобы её можно было протестировать
+ * изолированно (см. tests/logic.test.mjs).
+ */
+function computeSm2Update(currentBox, correct, fromDate = new Date()) {
+  const box = correct ? Math.min(currentBox + 1, 5) : 1;
+  const days = INTERVALS[box];
+  const next = new Date(fromDate);
+  next.setDate(next.getDate() + days);
+  return { box, nextReview: next.toISOString() };
+}
+
 async function updateCardProgress(id, correct) {
   const card = await getCard(id);
   if (!card) return;
-  let box = correct ? Math.min(card.box + 1, 5) : 1;
-  const days = INTERVALS[box];
-  const next = new Date();
-  next.setDate(next.getDate() + days);
+  const { box, nextReview } = computeSm2Update(card.box, correct);
   const t = await tx('cards', 'readwrite');
-  t.objectStore('cards').put({ ...card, box, nextReview: next.toISOString() });
+  t.objectStore('cards').put({ ...card, box, nextReview });
   await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
 }
 
@@ -596,4 +723,25 @@ async function importFullBackupCards(deckId, cards) {
     await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
   }
   return { added: toInsert.length, skipped };
+}
+
+/**
+ * Импортирует бэкап СРАЗУ ВСЕХ колод (массив decks, каждая со своими cards
+ * и прогрессом) — каждая колода в бэкапе создаётся заново (не мёржится с
+ * уже существующими, чтобы не было риска случайно перемешать чужие данные).
+ * Возвращает { decksCount, cardsAdded }.
+ */
+async function importAllDecksBackup(decksArray) {
+  let cardsAdded = 0;
+  let decksCount = 0;
+  for (const d of (decksArray || [])) {
+    if (!d || typeof d !== 'object') continue;
+    const newDeckId = await createDeck(d.name || 'Imported deck', {
+      wordLang: d.wordLang, translationLang: d.translationLang, color: d.color,
+    });
+    const { added } = await importFullBackupCards(newDeckId, d.cards || []);
+    cardsAdded += added;
+    decksCount++;
+  }
+  return { decksCount, cardsAdded };
 }
