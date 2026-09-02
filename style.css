@@ -402,6 +402,38 @@ button:disabled {
   margin-bottom: 20px;
 }
 
+.cards-search-row {
+  position: relative;
+  margin-bottom: 16px;
+}
+.cards-search-input {
+  width: 100%;
+  background: var(--bg-sunken);
+  border: 1.5px solid var(--border);
+  color: var(--text-primary);
+  padding: 11px 36px 11px 14px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  transition: border-color .15s ease, background .15s ease;
+}
+.cards-search-input:focus { border-color: var(--accent); background: var(--bg-elevated); }
+.cards-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cards-search-clear[hidden] { display: none; }
+
 .entry-list { display: flex; flex-direction: column; gap: 2px; }
 .entry-row {
   display: flex;
@@ -773,6 +805,7 @@ button:disabled {
   box-shadow: var(--shadow-xs);
 }
 .stat-label { font-size: 14.5px; color: var(--text-secondary); }
+.stat-sublabel { font-size: 11px; color: var(--text-tertiary); font-weight: 400; }
 .stat-value { font-size: 24px; color: var(--accent); font-weight: 700; }
 
 .stat-block { margin-top: 18px; }
@@ -782,6 +815,12 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: .04em;
   color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.stat-block-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
   margin-bottom: 10px;
 }
 

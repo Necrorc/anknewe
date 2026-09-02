@@ -293,10 +293,75 @@ async function runCsvParserTests() {
 
 /* ---------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------- *
+ * Согласование числительных (i18n.js) — pluralize/pluralWord
+ * ---------------------------------------------------------------------- */
+
+async function runPluralizeTests() {
+  console.log('\n=== Согласование числительных (i18n.js: pluralize/pluralWord) ===');
+  const i18nCode = fs.readFileSync(path.join(root, 'i18n.js'), 'utf8');
+  const { setLang, pluralize, pluralWord } = new Function(i18nCode + '; return { setLang, pluralize, pluralWord };')();
+
+  await test('RU: 1 → карточка', () => { setLang('ru'); assert.equal(pluralize(1, 'card'), '1 карточка'); });
+  await test('RU: 2–4 → карточки', () => {
+    setLang('ru');
+    assert.equal(pluralize(2, 'card'), '2 карточки');
+    assert.equal(pluralize(3, 'card'), '3 карточки');
+    assert.equal(pluralize(4, 'card'), '4 карточки');
+  });
+  await test('RU: 0, 5–20 → карточек', () => {
+    setLang('ru');
+    assert.equal(pluralize(0, 'card'), '0 карточек');
+    assert.equal(pluralize(5, 'card'), '5 карточек');
+    assert.equal(pluralize(11, 'card'), '11 карточек');
+    assert.equal(pluralize(20, 'card'), '20 карточек');
+  });
+  await test('RU: составные числа (21 → карточка, 22 → карточки, 25 → карточек)', () => {
+    setLang('ru');
+    assert.equal(pluralize(21, 'card'), '21 карточка');
+    assert.equal(pluralize(22, 'card'), '22 карточки');
+    assert.equal(pluralize(25, 'card'), '25 карточек');
+  });
+  await test('RU: 11–14 всегда "карточек", даже 111/112', () => {
+    setLang('ru');
+    assert.equal(pluralize(11, 'card'), '11 карточек');
+    assert.equal(pluralize(111, 'card'), '111 карточек');
+    assert.equal(pluralize(112, 'card'), '112 карточек');
+  });
+  await test('EN: 1 → card (единственное), иначе → cards', () => {
+    setLang('en');
+    assert.equal(pluralize(1, 'card'), '1 card');
+    assert.equal(pluralize(2, 'card'), '2 cards');
+    assert.equal(pluralize(0, 'card'), '0 cards');
+  });
+  await test('PL: 1 → fiszka, 2–4 → fiszki (кроме 12–14), 5+ → fiszek', () => {
+    setLang('pl');
+    assert.equal(pluralize(1, 'card'), '1 fiszka');
+    assert.equal(pluralize(2, 'card'), '2 fiszki');
+    assert.equal(pluralize(5, 'card'), '5 fiszek');
+    assert.equal(pluralize(12, 'card'), '12 fiszek'); // исключение из "2-4"
+    assert.equal(pluralize(22, 'card'), '22 fiszki');
+  });
+  await test('pluralWord возвращает только форму слова, без числа', () => {
+    setLang('ru');
+    assert.equal(pluralWord(1, 'card'), 'карточка');
+    assert.equal(pluralWord(5, 'card'), 'карточек');
+  });
+  await test('работает для других существительных (deck/день/группа/дубль)', () => {
+    setLang('ru');
+    assert.equal(pluralize(1, 'deck'), '1 колода');
+    assert.equal(pluralize(3, 'deck'), '3 колоды');
+    assert.equal(pluralize(1, 'day'), '1 день');
+    assert.equal(pluralize(2, 'day'), '2 дня');
+    assert.equal(pluralize(5, 'day'), '5 дней');
+  });
+}
+
 async function main() {
   await runSm2Tests();
   await runListenQueueTests();
   await runCsvParserTests();
+  await runPluralizeTests();
 
   console.log(`\n${'-'.repeat(50)}`);
   console.log(`Пройдено: ${passed}, провалено: ${failed}`);

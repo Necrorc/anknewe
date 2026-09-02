@@ -22,14 +22,14 @@ const TRANSLATIONS = {
     'decks.newDeck': 'Новая колода',
     'decks.mergeDecks': '🔗 Объединить колоды',
     'decks.exportAllBtn': '📦 Экспортировать всё',
-    'export.allDecksDownloadedToast': 'Скачано: {n} колод одним файлом',
+    'export.allDecksDownloadedToast': 'Скачано: {n} {noun} одним файлом',
     'import.allDecksDetected': 'Обнаружен бэкап сразу нескольких колод — импортирую каждую отдельно.',
-    'import.allDecksAddedToast': 'Импортировано колод: {decks}, карточек: {cards}',
+    'import.allDecksAddedToast': 'Импортировано: {decks} {decksNoun}, {cards} {cardsNoun}',
     'decks.noDecksToExportToast': 'Нет ни одной колоды для экспорта',
     'decks.restoredToast': 'Колода «{name}» восстановлена',
-    'decks.rowInfo': '{count} карточек · {wordLang} → {trLang}',
+    'decks.rowInfo': '{count} {noun} · {wordLang} → {trLang}',
     'decks.deleteConfirmTitle': 'Удалить колоду?',
-    'decks.deleteConfirmText': 'Колода «{name}» и все {count} карточек в ней будут удалены безвозвратно.',
+    'decks.deleteConfirmText': 'Колода «{name}» и все {count} {noun} в ней будут удалены безвозвратно.',
     'decks.activeToast': 'Активная колода: «{name}»',
     'decks.deletedToast': 'Колода «{name}» удалена',
     'decks.needTwoDecksToast': 'Нужно минимум 2 колоды, чтобы объединять',
@@ -44,6 +44,9 @@ const TRANSLATIONS = {
     'deckModal.createBtn': 'Создать',
     'deckModal.saveBtn': 'Сохранить',
     'deckModal.nameEmptyToast': 'Название не может быть пустым',
+    'deckModal.sameLangConfirmTitle': 'Языки совпадают — это осознанный выбор?',
+    'deckModal.sameLangConfirmText': 'Язык слов и язык перевода у этой колоды одинаковые. Так тоже можно (например, для синонимов или толкований в рамках одного языка) — просто уточняем, что это не опечатка.',
+    'deckModal.sameLangConfirmBtn': 'Да, всё верно',
     'deckModal.updatedToast': 'Колода «{name}» обновлена',
     'deckModal.createdToast': 'Колода «{name}» создана',
 
@@ -54,13 +57,14 @@ const TRANSLATIONS = {
     'merge.confirmBtn': 'Объединить',
     'merge.sameDeckToast': 'Выбери две разные колоды',
     'merge.diffLangToast': 'У этих колод разные языки — объединять нельзя',
+    'merge.noCompatibleOption': 'Нет колод с такой же языковой парой',
     'merge.confirmTitle': 'Объединить колоды?',
     'merge.confirmText': 'Все карточки из «{source}» переедут в «{target}» (дубли пропустятся), а колода «{source}» будет удалена. Это необратимо.',
     'merge.doneToast': 'Готово! Перенесено: {moved}',
-    'merge.doneSkippedSuffix': ', пропущено дублей: {skipped}',
+    'merge.doneSkippedSuffix': ', пропущено: {skipped} {noun}',
     'merge.optionLabel': '{name} ({wordLang} → {trLang}, {count})',
 
-    'cards.countLabel': '{count} карточек',
+    'cards.countLabel': '{count} {noun}',
     'cards.add': '+ Добавить',
     'cards.import': 'Импорт файла',
     'cards.export': 'Экспорт',
@@ -71,12 +75,15 @@ const TRANSLATIONS = {
     'cards.mergeSimilarConfirmText': 'Карточки с одинаковым словом (но разным переводом) или одинаковым переводом (но разным словом) объединятся в одну — с нумерованным списком значений «1. .. 2. ..». Ничего не удаляется безвозвратно: это можно отменить.',
     'cards.mergeSimilarBtn': 'Совместить',
     'cards.mergeSimilarNoneToast': 'Похожих карточек не найдено',
-    'cards.mergeSimilarDoneToast': 'Объединено групп: {groups}, карточек стало меньше на {removed}',
-    'cards.mergeSimilarAutoToast': 'Заодно объединил похожие карточки: {groups} групп',
+    'cards.mergeSimilarDoneToast': 'Объединено {groupsPhrase}, удалено {removed} {noun}',
+    'cards.mergeSimilarAutoToast': 'Заодно объединил похожие карточки: {groupsPhrase}',
     'cards.restoredAfterMergeToast': 'Отменено — карточки возвращены как было',
     'cards.resetLevels': 'Сбросить уровни',
     'cards.clearDeck': 'Очистить колоду',
     'cards.emptyHint': 'В этой колоде пока нет карточек.<br>Добавь первую или импортируй файл.',
+    'cards.searchPlaceholder': 'Поиск по слову, переводу или тегу',
+    'cards.searchResultsLabel': 'Найдено: {matched} из {total}',
+    'cards.searchNoResults': 'Ничего не найдено по этому запросу.',
     'cards.levelLabel': 'ур.{n}',
     'cards.deleteConfirmTitle': 'Удалить карточку?',
     'cards.fillBothToast': 'Заполни оба поля',
@@ -84,15 +91,15 @@ const TRANSLATIONS = {
     'cards.duplicateToast': 'Такая пара слово/перевод уже есть в колоде — не стал дублировать',
     'cards.addedToast': 'Карточка добавлена',
     'cards.alreadyExistsToast': 'Такая карточка уже есть — пропущено',
-    'cards.dedupRemovedToast': 'Удалено дублей: {n}',
+    'cards.dedupRemovedToast': 'Удалено: {n} {noun}',
     'cards.dedupNoneToast': 'Дублей не найдено',
     'cards.noCardsToast': 'В колоде нет карточек',
     'cards.noCardsForExportToast': 'В колоде нет карточек для экспорта',
     'cards.clearConfirmTitle': 'Очистить колоду?',
-    'cards.clearConfirmText': 'Все {count} карточек в колоде «{name}» будут удалены безвозвратно. Другие колоды это не затронет.',
+    'cards.clearConfirmText': 'Все {count} {noun} в колоде «{name}» будут удалены безвозвратно. Другие колоды это не затронет.',
     'cards.clearBtn': 'Удалить всё',
-    'cards.clearedToast': 'Удалено карточек: {n}',
-    'cards.restoredAllToast': 'Восстановлено карточек: {n}',
+    'cards.clearedToast': 'Удалено: {n} {noun}',
+    'cards.restoredAllToast': 'Восстановлено: {n} {noun}',
     'cards.deletedToast': 'Карточка удалена',
 
     'addCardModal.title': 'Новая карточка',
@@ -105,13 +112,13 @@ const TRANSLATIONS = {
     'import.parseErrorToast': 'Не получилось разобрать файл: {error}',
     'import.noPairsToast': 'В файле не нашлось пар слово/перевод',
     'import.addedToast': 'Добавлено: {added}',
-    'import.skippedSuffix': ', пропущено дублей: {skipped}',
+    'import.skippedSuffix': ', пропущено: {skipped} {noun}',
 
     'exportModal.title': 'Экспорт колоды',
     'exportModal.hint': 'Скачает файл со всеми карточками активной колоды — его потом можно будет снова загрузить через «Импорт файла», в этом или другом устройстве. Сохраняются только слова и переводы; прогресс повторения (уровни карточек) не переносится.',
     'exportModal.csvBtn': 'Скачать .csv',
     'exportModal.jsonBtn': 'Скачать .json',
-    'export.downloadedToast': 'Скачано: {n} карточек',
+    'export.downloadedToast': 'Скачано: {n} {noun}',
 
     'resetModal.title': 'Сбросить уровни карточек',
     'resetModal.hint': 'Карточки не удаляются — сбрасывается только их прогресс повторения, и все они сразу становятся доступны к повторению. Действие затрагивает всю активную колоду.',
@@ -120,7 +127,7 @@ const TRANSLATIONS = {
     'resetModal.confirmTitle': 'Сбросить уровни карточек?',
     'resetModal.confirmText': 'У всех карточек активной колоды уровень станет {target}, и все они сразу станут доступны к повторению. Карточки не удаляются — сбрасывается только прогресс.',
     'resetModal.confirmBtn': 'Сбросить',
-    'resetModal.doneToast': 'Уровень сброшен до {target} у {n} карточек',
+    'resetModal.doneToast': 'Уровень сброшен до {target} у {n} {noun}',
 
     'learn.title': 'Учить',
     'learn.deckInfo': 'Колода «{name}» · к повторению: {due}',
@@ -135,8 +142,8 @@ const TRANSLATIONS = {
     'learn.tapToFlipBack': 'нажми ещё раз, чтобы снова увидеть слово',
     'learn.stampNo': 'НЕ ЗНАЛ',
     'learn.stampYes': 'ЗНАЛ',
-    'learn.sessionComplete': 'Сессия повторения завершена!\nВыучено карточек: {n} 👏',
-    'learn.sessionCompleteOf': 'Сессия повторения завершена!\nВыучено карточек: {n} из {total} 👏',
+    'learn.sessionComplete': 'Сессия повторения завершена!\nВыучено: {n} {noun} 👏',
+    'learn.sessionCompleteOf': 'Сессия повторения завершена!\nВыучено: {n} из {total} {noun} 👏',
     'learn.answerKnowToast': '✓ Знал',
     'learn.answerDontKnowToast': '✗ Повторим ещё раз в этой сессии',
     'learn.repeatAgainBtn': 'Повторить ещё раз',
@@ -147,14 +154,15 @@ const TRANSLATIONS = {
 
     'listen.title': 'Слушать',
     'listen.hint': 'Бот вслух прочитает все карточки колоды подряд — слово, потом перевод.',
-    'listen.deckInfo': 'Колода «{name}» · карточек: {count}',
+    'listen.deckInfo': 'Колода «{name}» · {countPhrase}',
     'listen.shuffleLabel': 'Случайный порядок',
     'listen.repeatLabel': 'Повторять по кругу',
     'listen.startBtn': '▶ Начать',
     'listen.finishBtn': 'Закончить',
     'listen.startAgainBtn': 'Слушать заново',
-    'listen.finishedText': 'Прослушано карточек: {n} 🔊',
+    'listen.finishedText': 'Прослушано: {n} {noun} 🔊',
     'listen.notSupportedText': 'Этот браузер не поддерживает озвучку речи (Web Speech API).\nВ Safari на iPhone это должно работать.',
+    'listen.noVoicesText': 'Синтез речи недоступен в этом браузере — не найдено ни одного голоса для озвучки.\nПопробуй другой браузер или установи языковые голоса в настройках устройства.',
     'listen.noCardsText': 'В колоде «{name}» пока нет карточек.\nДобавь их на вкладке «Карточки».',
     'listen.deleteConfirmText': '«{word}» → «{translation}» будет удалена из колоды безвозвратно.',
     'listen.deletedToast': 'Карточка удалена',
@@ -164,6 +172,7 @@ const TRANSLATIONS = {
     'stats.deckName': 'Колода «{name}»',
     'stats.totalLabel': 'Всего карточек',
     'stats.dueLabel': 'Готово к повторению',
+    'stats.dueRightNowHint': 'доступно прямо сейчас',
 
     'settings.title': 'Настройки',
     'settings.subtitle': 'Поведение приложения на этом устройстве',
@@ -174,6 +183,7 @@ const TRANSLATIONS = {
     'settings.deletePositionStamps': 'Внизу, под кнопками «Знал» / «Не знал»',
     'settings.dailyGoalLabel': 'Дневная цель (карточек в день)',
     'settings.dailyGoalHint': 'Учитываются ответы во всех колодах вместе — так считается серия дней подряд.',
+    'settings.dailyGoalClampedToast': 'Дневная цель ограничена: {value} {noun}',
     'settings.reminderLabel': 'Напоминание повторить карточки',
     'settings.reminderEnable': 'Включить напоминание',
     'settings.requestPermission': 'Разрешить уведомления',
@@ -183,7 +193,7 @@ const TRANSLATIONS = {
     'notifications.denied': 'Уведомления заблокированы в настройках браузера — включи их там, чтобы напоминание работало.',
     'notifications.default': 'Нажми «Разрешить уведомления», чтобы напоминание могло показываться.',
     'notifications.unsupported': 'Этот браузер не поддерживает уведомления.',
-    'notifications.reminderFired': 'Пора повторить {n} карточек!',
+    'notifications.reminderFired': 'Пора повторить {n} {noun}!',
 
     'learn.dailyGoalProgress': '{count} / {goal} на сегодня',
     'learn.allDecksLabel': 'Учить карточки из всех колод с этим языком',
@@ -191,11 +201,12 @@ const TRANSLATIONS = {
     'learn.tagFilterAll': 'Все теги',
     'learn.noDeckLangMatch': 'Других колод с таким же языком пока нет',
 
-    'decks.streakText': '🔥 Серия: {n} дней подряд',
+    'decks.streakText': '🔥 Серия: {n} {noun} подряд',
     'decks.streakNone': 'Начни серию — выполни дневную цель сегодня',
     'decks.dailyGoalLabel': 'Сегодня: {count} / {goal}',
 
     'stats.forecastTitle': 'Прогноз повторений',
+    'stats.forecastHint': 'Сколько карточек будет доступно к повторению по датам — «Сегодня» уже включает то, что доступно прямо сейчас.',
     'stats.forecastToday': 'Сегодня',
     'stats.forecastTomorrow': 'Завтра',
     'stats.forecastWeek': 'На неделе',
@@ -217,18 +228,21 @@ const TRANSLATIONS = {
     'exportModal.backupHint': 'Полный бэкап сохраняет ещё и прогресс (уровни, даты повторения, теги) — удобно для переноса на другое устройство без потери истории обучения.',
     'exportModal.backupBtn': '📦 Полный бэкап (.kdeck.json)',
     'exportModal.shareLinkBtn': '🔗 Поделиться ссылкой',
-    'export.backupDownloadedToast': 'Бэкап скачан: {n} карточек с прогрессом',
+    'export.backupDownloadedToast': 'Бэкап скачан: {n} {noun} с прогрессом',
 
     'shareLink.title': 'Ссылка для передачи колоды',
     'shareLink.hint': 'Ссылка содержит слова, переводы и теги (без прогресса повторения) — всё зашито прямо в адрес, никуда не отправляется.',
     'shareLink.copyBtn': 'Скопировать ссылку',
     'shareLink.copiedToast': 'Ссылка скопирована',
     'shareLink.tooLongToast': 'Колода слишком большая для ссылки — воспользуйся файловым экспортом (.json/.csv) вместо неё.',
+    'shareLink.largeDeckConfirmTitle': 'Большая колода — точно ссылкой?',
+    'shareLink.largeDeckConfirmText': 'В колоде {count} {noun} — ссылка получится длинной и неудобной для отправки. Возможно, удобнее воспользоваться файловым экспортом (.json/.csv) вместо неё?',
+    'shareLink.largeDeckConfirmBtn': 'Всё равно создать ссылку',
     'shareLink.unsupportedToast': 'Этот браузер не поддерживает сжатие для ссылок — воспользуйся файловым экспортом.',
     'shareLink.importTitle': 'Импортировать колоду по ссылке?',
-    'shareLink.importSummary': '«{name}»: {count} карточек ({wordLang} → {trLang})',
+    'shareLink.importSummary': '«{name}»: {count} {noun} ({wordLang} → {trLang})',
     'shareLink.importBtn': 'Импортировать',
-    'shareLink.importedToast': 'Колода «{name}» импортирована ({count} карточек)',
+    'shareLink.importedToast': 'Колода «{name}» импортирована ({count} {noun})',
     'shareLink.invalidToast': 'Не получилось прочитать ссылку — возможно, она повреждена или устарела.',
 
     'import.fullBackupAddedToast': 'Импортировано с прогрессом: {added}',
@@ -280,14 +294,14 @@ const TRANSLATIONS = {
     'decks.newDeck': 'New deck',
     'decks.mergeDecks': '🔗 Merge decks',
     'decks.exportAllBtn': '📦 Export everything',
-    'export.allDecksDownloadedToast': 'Downloaded: {n} decks in one file',
+    'export.allDecksDownloadedToast': 'Downloaded: {n} {noun} in one file',
     'import.allDecksDetected': 'Detected a backup of several decks — importing each one separately.',
-    'import.allDecksAddedToast': 'Imported decks: {decks}, cards: {cards}',
+    'import.allDecksAddedToast': 'Imported: {decks} {decksNoun}, {cards} {cardsNoun}',
     'decks.noDecksToExportToast': "There aren't any decks to export",
     'decks.restoredToast': 'Deck «{name}» restored',
-    'decks.rowInfo': '{count} cards · {wordLang} → {trLang}',
+    'decks.rowInfo': '{count} {noun} · {wordLang} → {trLang}',
     'decks.deleteConfirmTitle': 'Delete deck?',
-    'decks.deleteConfirmText': 'The deck «{name}» and all {count} cards in it will be permanently deleted.',
+    'decks.deleteConfirmText': 'The deck «{name}» and all {count} {noun} in it will be permanently deleted.',
     'decks.activeToast': 'Active deck: «{name}»',
     'decks.deletedToast': 'Deck «{name}» deleted',
     'decks.needTwoDecksToast': 'You need at least 2 decks to merge',
@@ -302,6 +316,9 @@ const TRANSLATIONS = {
     'deckModal.createBtn': 'Create',
     'deckModal.saveBtn': 'Save',
     'deckModal.nameEmptyToast': "Name can't be empty",
+    'deckModal.sameLangConfirmTitle': 'Same language for both — is that intentional?',
+    'deckModal.sameLangConfirmText': "This deck's word language and translation language are the same. That's fine (e.g. for synonyms or definitions within one language) — just double-checking it's not a typo.",
+    'deckModal.sameLangConfirmBtn': "Yes, that's right",
     'deckModal.updatedToast': 'Deck «{name}» updated',
     'deckModal.createdToast': 'Deck «{name}» created',
 
@@ -312,13 +329,14 @@ const TRANSLATIONS = {
     'merge.confirmBtn': 'Merge',
     'merge.sameDeckToast': 'Pick two different decks',
     'merge.diffLangToast': "These decks have different languages — can't merge them",
+    'merge.noCompatibleOption': 'No decks with a matching language pair',
     'merge.confirmTitle': 'Merge decks?',
     'merge.confirmText': 'All cards from «{source}» will move into «{target}» (duplicates skipped), and «{source}» will be deleted. This can\'t be undone.',
     'merge.doneToast': 'Done! Moved: {moved}',
-    'merge.doneSkippedSuffix': ', duplicates skipped: {skipped}',
+    'merge.doneSkippedSuffix': ', skipped: {skipped} {noun}',
     'merge.optionLabel': '{name} ({wordLang} → {trLang}, {count})',
 
-    'cards.countLabel': '{count} cards',
+    'cards.countLabel': '{count} {noun}',
     'cards.add': '+ Add',
     'cards.import': 'Import file',
     'cards.export': 'Export',
@@ -329,12 +347,15 @@ const TRANSLATIONS = {
     'cards.mergeSimilarConfirmText': 'Cards with the same word (but a different translation) or the same translation (but a different word) will be combined into one — with a numbered list of values, "1. .. 2. ..". Nothing is permanently lost: this can be undone.',
     'cards.mergeSimilarBtn': 'Merge',
     'cards.mergeSimilarNoneToast': 'No similar cards found',
-    'cards.mergeSimilarDoneToast': 'Groups merged: {groups}, {removed} fewer cards',
-    'cards.mergeSimilarAutoToast': 'Also merged similar cards: {groups} groups',
+    'cards.mergeSimilarDoneToast': 'Merged {groupsPhrase}, removed {removed} {noun}',
+    'cards.mergeSimilarAutoToast': 'Also merged similar cards: {groupsPhrase}',
     'cards.restoredAfterMergeToast': 'Undone — cards restored to how they were',
     'cards.resetLevels': 'Reset levels',
     'cards.clearDeck': 'Clear deck',
     'cards.emptyHint': "This deck doesn't have any cards yet.<br>Add one or import a file.",
+    'cards.searchPlaceholder': 'Search by word, translation or tag',
+    'cards.searchResultsLabel': 'Found: {matched} of {total}',
+    'cards.searchNoResults': 'Nothing matches this search.',
     'cards.levelLabel': 'lvl.{n}',
     'cards.deleteConfirmTitle': 'Delete card?',
     'cards.fillBothToast': 'Fill in both fields',
@@ -342,15 +363,15 @@ const TRANSLATIONS = {
     'cards.duplicateToast': "That word/translation pair already exists in this deck — didn't duplicate it",
     'cards.addedToast': 'Card added',
     'cards.alreadyExistsToast': 'That card already exists — skipped',
-    'cards.dedupRemovedToast': 'Duplicates removed: {n}',
+    'cards.dedupRemovedToast': 'Removed: {n} {noun}',
     'cards.dedupNoneToast': 'No duplicates found',
     'cards.noCardsToast': 'This deck has no cards',
     'cards.noCardsForExportToast': 'This deck has no cards to export',
     'cards.clearConfirmTitle': 'Clear this deck?',
-    'cards.clearConfirmText': 'All {count} cards in the deck «{name}» will be permanently deleted. Other decks will not be affected.',
+    'cards.clearConfirmText': 'All {count} {noun} in the deck «{name}» will be permanently deleted. Other decks will not be affected.',
     'cards.clearBtn': 'Delete all',
-    'cards.clearedToast': 'Cards deleted: {n}',
-    'cards.restoredAllToast': 'Cards restored: {n}',
+    'cards.clearedToast': 'Deleted: {n} {noun}',
+    'cards.restoredAllToast': 'Restored: {n} {noun}',
     'cards.deletedToast': 'Card deleted',
 
     'addCardModal.title': 'New card',
@@ -363,13 +384,13 @@ const TRANSLATIONS = {
     'import.parseErrorToast': "Couldn't parse the file: {error}",
     'import.noPairsToast': "No word/translation pairs found in the file",
     'import.addedToast': 'Added: {added}',
-    'import.skippedSuffix': ', duplicates skipped: {skipped}',
+    'import.skippedSuffix': ', skipped: {skipped} {noun}',
 
     'exportModal.title': 'Export deck',
     'exportModal.hint': 'Downloads a file with all the cards in the active deck — you can later re-import it via "Import file", on this or another device. Only words and translations are saved; review progress (card levels) is not included.',
     'exportModal.csvBtn': 'Download .csv',
     'exportModal.jsonBtn': 'Download .json',
-    'export.downloadedToast': 'Downloaded: {n} cards',
+    'export.downloadedToast': 'Downloaded: {n} {noun}',
 
     'resetModal.title': 'Reset card levels',
     'resetModal.hint': "Cards aren't deleted — only their review progress is reset, and they all become due for review right away. This affects the whole active deck.",
@@ -378,7 +399,7 @@ const TRANSLATIONS = {
     'resetModal.confirmTitle': 'Reset card levels?',
     'resetModal.confirmText': "Every card in the active deck will be set to level {target} and become due for review right away. Cards aren't deleted — only progress is reset.",
     'resetModal.confirmBtn': 'Reset',
-    'resetModal.doneToast': 'Level reset to {target} for {n} cards',
+    'resetModal.doneToast': 'Level reset to {target} for {n} {noun}',
 
     'learn.title': 'Learn',
     'learn.deckInfo': 'Deck «{name}» · due for review: {due}',
@@ -393,8 +414,8 @@ const TRANSLATIONS = {
     'learn.tapToFlipBack': 'tap again to see the word',
     'learn.stampNo': "DIDN'T KNOW",
     'learn.stampYes': 'KNEW IT',
-    'learn.sessionComplete': 'Review session complete!\nCards learned: {n} 👏',
-    'learn.sessionCompleteOf': 'Review session complete!\nCards learned: {n} of {total} 👏',
+    'learn.sessionComplete': 'Review session complete!\nLearned: {n} {noun} 👏',
+    'learn.sessionCompleteOf': 'Review session complete!\nLearned: {n} of {total} {noun} 👏',
     'learn.answerKnowToast': '✓ Knew it',
     'learn.answerDontKnowToast': "✗ We'll see this again this session",
     'learn.repeatAgainBtn': 'Repeat again',
@@ -405,14 +426,15 @@ const TRANSLATIONS = {
 
     'listen.title': 'Listen',
     'listen.hint': "The app will read all the deck's cards aloud in a row — word, then translation.",
-    'listen.deckInfo': 'Deck «{name}» · cards: {count}',
+    'listen.deckInfo': 'Deck «{name}» · {countPhrase}',
     'listen.shuffleLabel': 'Random order',
     'listen.repeatLabel': 'Loop repeat',
     'listen.startBtn': '▶ Start',
     'listen.finishBtn': 'Finish',
     'listen.startAgainBtn': 'Listen again',
-    'listen.finishedText': 'Cards listened to: {n} 🔊',
+    'listen.finishedText': 'Listened to: {n} {noun} 🔊',
     'listen.notSupportedText': "This browser doesn't support speech synthesis (Web Speech API).\nIt should work in Safari on iPhone.",
+    'listen.noVoicesText': "Speech synthesis isn't available in this browser — no voices were found.\nTry a different browser, or install language voices in your device settings.",
     'listen.noCardsText': "The deck «{name}» doesn't have any cards yet.\nAdd some on the Cards tab.",
     'listen.deleteConfirmText': '«{word}» → «{translation}» will be permanently deleted from the deck.',
     'listen.deletedToast': 'Card deleted',
@@ -422,6 +444,7 @@ const TRANSLATIONS = {
     'stats.deckName': 'Deck «{name}»',
     'stats.totalLabel': 'Total cards',
     'stats.dueLabel': 'Due for review',
+    'stats.dueRightNowHint': 'available right now',
 
     'settings.title': 'Settings',
     'settings.subtitle': 'App behavior on this device',
@@ -432,6 +455,7 @@ const TRANSLATIONS = {
     'settings.deletePositionStamps': 'At the bottom, under "Knew it" / "Didn\'t know"',
     'settings.dailyGoalLabel': 'Daily goal (cards per day)',
     'settings.dailyGoalHint': "Counts answers across all decks together — that's what the daily streak is based on.",
+    'settings.dailyGoalClampedToast': 'Daily goal limited to: {value} {noun}',
     'settings.reminderLabel': 'Reminder to review cards',
     'settings.reminderEnable': 'Enable reminder',
     'settings.requestPermission': 'Allow notifications',
@@ -441,7 +465,7 @@ const TRANSLATIONS = {
     'notifications.denied': 'Notifications are blocked in browser settings — enable them there for the reminder to work.',
     'notifications.default': 'Tap "Allow notifications" so the reminder can be shown.',
     'notifications.unsupported': "This browser doesn't support notifications.",
-    'notifications.reminderFired': 'Time to review {n} cards!',
+    'notifications.reminderFired': 'Time to review {n} {noun}!',
 
     'learn.dailyGoalProgress': '{count} / {goal} today',
     'learn.allDecksLabel': 'Study cards from all decks with this language',
@@ -449,11 +473,12 @@ const TRANSLATIONS = {
     'learn.tagFilterAll': 'All tags',
     'learn.noDeckLangMatch': "There aren't any other decks with this language pair yet",
 
-    'decks.streakText': '🔥 Streak: {n} days in a row',
+    'decks.streakText': '🔥 Streak: {n} {noun} in a row',
     'decks.streakNone': "Start a streak — hit today's goal",
     'decks.dailyGoalLabel': 'Today: {count} / {goal}',
 
     'stats.forecastTitle': 'Review forecast',
+    'stats.forecastHint': 'How many cards will be due, by date — "Today" already includes what\'s available right now.',
     'stats.forecastToday': 'Today',
     'stats.forecastTomorrow': 'Tomorrow',
     'stats.forecastWeek': 'This week',
@@ -475,18 +500,21 @@ const TRANSLATIONS = {
     'exportModal.backupHint': 'A full backup also saves progress (levels, review dates, tags) — handy for moving to another device without losing your learning history.',
     'exportModal.backupBtn': '📦 Full backup (.kdeck.json)',
     'exportModal.shareLinkBtn': '🔗 Share a link',
-    'export.backupDownloadedToast': 'Backup downloaded: {n} cards with progress',
+    'export.backupDownloadedToast': 'Backup downloaded: {n} {noun} with progress',
 
     'shareLink.title': 'Link to share this deck',
     'shareLink.hint': "The link contains words, translations and tags (no review progress) — it's all baked into the address, nothing is sent anywhere.",
     'shareLink.copyBtn': 'Copy link',
     'shareLink.copiedToast': 'Link copied',
     'shareLink.tooLongToast': 'This deck is too big for a link — use file export (.json/.csv) instead.',
+    'shareLink.largeDeckConfirmTitle': 'Large deck — use a link anyway?',
+    'shareLink.largeDeckConfirmText': 'This deck has {count} {noun} — the link will end up long and awkward to send. File export (.json/.csv) might be more convenient instead?',
+    'shareLink.largeDeckConfirmBtn': 'Create the link anyway',
     'shareLink.unsupportedToast': "This browser doesn't support compression for links — use file export instead.",
     'shareLink.importTitle': 'Import this deck from the link?',
-    'shareLink.importSummary': '"{name}": {count} cards ({wordLang} → {trLang})',
+    'shareLink.importSummary': '"{name}": {count} {noun} ({wordLang} → {trLang})',
     'shareLink.importBtn': 'Import',
-    'shareLink.importedToast': 'Deck "{name}" imported ({count} cards)',
+    'shareLink.importedToast': 'Deck "{name}" imported ({count} {noun})',
     'shareLink.invalidToast': "Couldn't read the link — it may be corrupted or outdated.",
 
     'import.fullBackupAddedToast': 'Imported with progress: {added}',
@@ -538,14 +566,14 @@ const TRANSLATIONS = {
     'decks.newDeck': 'Nowa talia',
     'decks.mergeDecks': '🔗 Połącz talie',
     'decks.exportAllBtn': '📦 Eksportuj wszystko',
-    'export.allDecksDownloadedToast': 'Pobrano: {n} talii w jednym pliku',
+    'export.allDecksDownloadedToast': 'Pobrano: {n} {noun} w jednym pliku',
     'import.allDecksDetected': 'Wykryto kopię zapasową kilku talii — importuję każdą osobno.',
-    'import.allDecksAddedToast': 'Zaimportowano talii: {decks}, fiszek: {cards}',
+    'import.allDecksAddedToast': 'Zaimportowano: {decks} {decksNoun}, {cards} {cardsNoun}',
     'decks.noDecksToExportToast': 'Nie ma żadnej talii do eksportu',
     'decks.restoredToast': 'Talia «{name}» przywrócona',
-    'decks.rowInfo': '{count} fiszek · {wordLang} → {trLang}',
+    'decks.rowInfo': '{count} {noun} · {wordLang} → {trLang}',
     'decks.deleteConfirmTitle': 'Usunąć talię?',
-    'decks.deleteConfirmText': 'Talia «{name}» i wszystkie {count} fiszek w niej zostaną trwale usunięte.',
+    'decks.deleteConfirmText': 'Talia «{name}» i wszystkie {count} {noun} w niej zostaną trwale usunięte.',
     'decks.activeToast': 'Aktywna talia: «{name}»',
     'decks.deletedToast': 'Talia «{name}» usunięta',
     'decks.needTwoDecksToast': 'Potrzebujesz co najmniej 2 talii, żeby je połączyć',
@@ -560,6 +588,9 @@ const TRANSLATIONS = {
     'deckModal.createBtn': 'Utwórz',
     'deckModal.saveBtn': 'Zapisz',
     'deckModal.nameEmptyToast': 'Nazwa nie może być pusta',
+    'deckModal.sameLangConfirmTitle': 'Języki są takie same — to celowy wybór?',
+    'deckModal.sameLangConfirmText': 'Język słów i język tłumaczenia w tej talii są takie same. To też jest w porządku (np. dla synonimów lub definicji w jednym języku) — tylko upewniamy się, że to nie pomyłka.',
+    'deckModal.sameLangConfirmBtn': 'Tak, to celowe',
     'deckModal.updatedToast': 'Talia «{name}» zaktualizowana',
     'deckModal.createdToast': 'Talia «{name}» utworzona',
 
@@ -570,13 +601,14 @@ const TRANSLATIONS = {
     'merge.confirmBtn': 'Połącz',
     'merge.sameDeckToast': 'Wybierz dwie różne talie',
     'merge.diffLangToast': 'Te talie mają różne języki — nie można ich połączyć',
+    'merge.noCompatibleOption': 'Brak talii z taką samą parą językową',
     'merge.confirmTitle': 'Połączyć talie?',
     'merge.confirmText': 'Wszystkie fiszki z «{source}» przeniosą się do «{target}» (duplikaty zostaną pominięte), a talia «{source}» zostanie usunięta. Tej operacji nie można cofnąć.',
     'merge.doneToast': 'Gotowe! Przeniesiono: {moved}',
-    'merge.doneSkippedSuffix': ', pominięto duplikatów: {skipped}',
+    'merge.doneSkippedSuffix': ', pominięto: {skipped} {noun}',
     'merge.optionLabel': '{name} ({wordLang} → {trLang}, {count})',
 
-    'cards.countLabel': '{count} fiszek',
+    'cards.countLabel': '{count} {noun}',
     'cards.add': '+ Dodaj',
     'cards.import': 'Importuj plik',
     'cards.export': 'Eksportuj',
@@ -587,12 +619,15 @@ const TRANSLATIONS = {
     'cards.mergeSimilarConfirmText': 'Fiszki z tym samym słowem (ale innym tłumaczeniem) lub tym samym tłumaczeniem (ale innym słowem) połączą się w jedną — z ponumerowaną listą wartości „1. .. 2. ..”. Nic nie ginie bezpowrotnie: można to cofnąć.',
     'cards.mergeSimilarBtn': 'Połącz',
     'cards.mergeSimilarNoneToast': 'Nie znaleziono podobnych fiszek',
-    'cards.mergeSimilarDoneToast': 'Połączono grup: {groups}, fiszek mniej o {removed}',
-    'cards.mergeSimilarAutoToast': 'Przy okazji połączono podobne fiszki: {groups} grup',
+    'cards.mergeSimilarDoneToast': 'Połączono {groupsPhrase}, usunięto {removed} {noun}',
+    'cards.mergeSimilarAutoToast': 'Przy okazji połączono podobne fiszki: {groupsPhrase}',
     'cards.restoredAfterMergeToast': 'Cofnięto — fiszki przywrócone do stanu sprzed',
     'cards.resetLevels': 'Zresetuj poziomy',
     'cards.clearDeck': 'Wyczyść talię',
     'cards.emptyHint': 'W tej talii nie ma jeszcze żadnych fiszek.<br>Dodaj pierwszą lub zaimportuj plik.',
+    'cards.searchPlaceholder': 'Szukaj po słowie, tłumaczeniu lub tagu',
+    'cards.searchResultsLabel': 'Znaleziono: {matched} z {total}',
+    'cards.searchNoResults': 'Nic nie pasuje do tego wyszukiwania.',
     'cards.levelLabel': 'poz.{n}',
     'cards.deleteConfirmTitle': 'Usunąć fiszkę?',
     'cards.fillBothToast': 'Wypełnij oba pola',
@@ -600,15 +635,15 @@ const TRANSLATIONS = {
     'cards.duplicateToast': 'Taka para słowo/tłumaczenie już istnieje w talii — pominięto',
     'cards.addedToast': 'Fiszka dodana',
     'cards.alreadyExistsToast': 'Taka fiszka już istnieje — pominięto',
-    'cards.dedupRemovedToast': 'Usunięto duplikatów: {n}',
+    'cards.dedupRemovedToast': 'Usunięto: {n} {noun}',
     'cards.dedupNoneToast': 'Nie znaleziono duplikatów',
     'cards.noCardsToast': 'W talii nie ma fiszek',
     'cards.noCardsForExportToast': 'W talii nie ma fiszek do eksportu',
     'cards.clearConfirmTitle': 'Wyczyścić talię?',
-    'cards.clearConfirmText': 'Wszystkie {count} fiszek w talii «{name}» zostaną trwale usunięte. Innych talii to nie dotyczy.',
+    'cards.clearConfirmText': 'Wszystkie {count} {noun} w talii «{name}» zostaną trwale usunięte. Innych talii to nie dotyczy.',
     'cards.clearBtn': 'Usuń wszystko',
-    'cards.clearedToast': 'Usunięto fiszek: {n}',
-    'cards.restoredAllToast': 'Przywrócono fiszek: {n}',
+    'cards.clearedToast': 'Usunięto: {n} {noun}',
+    'cards.restoredAllToast': 'Przywrócono: {n} {noun}',
     'cards.deletedToast': 'Fiszka usunięta',
 
     'addCardModal.title': 'Nowa fiszka',
@@ -621,13 +656,13 @@ const TRANSLATIONS = {
     'import.parseErrorToast': 'Nie udało się odczytać pliku: {error}',
     'import.noPairsToast': 'Nie znaleziono par słowo/tłumaczenie w pliku',
     'import.addedToast': 'Dodano: {added}',
-    'import.skippedSuffix': ', pominięto duplikatów: {skipped}',
+    'import.skippedSuffix': ', pominięto: {skipped} {noun}',
 
     'exportModal.title': 'Eksport talii',
     'exportModal.hint': 'Pobierze plik ze wszystkimi fiszkami aktywnej talii — można go potem zaimportować z powrotem przez „Importuj plik”, na tym lub innym urządzeniu. Zapisywane są tylko słowa i tłumaczenia; postęp powtórek (poziomy fiszek) nie jest przenoszony.',
     'exportModal.csvBtn': 'Pobierz .csv',
     'exportModal.jsonBtn': 'Pobierz .json',
-    'export.downloadedToast': 'Pobrano: {n} fiszek',
+    'export.downloadedToast': 'Pobrano: {n} {noun}',
 
     'resetModal.title': 'Zresetuj poziomy fiszek',
     'resetModal.hint': 'Fiszki nie są usuwane — resetuje się tylko postęp powtórek, a wszystkie od razu stają się dostępne do powtórki. Dotyczy całej aktywnej talii.',
@@ -636,7 +671,7 @@ const TRANSLATIONS = {
     'resetModal.confirmTitle': 'Zresetować poziomy fiszek?',
     'resetModal.confirmText': 'Wszystkie fiszki aktywnej talii otrzymają poziom {target} i od razu staną się dostępne do powtórki. Fiszki nie są usuwane — resetuje się tylko postęp.',
     'resetModal.confirmBtn': 'Zresetuj',
-    'resetModal.doneToast': 'Zresetowano poziom do {target} dla {n} fiszek',
+    'resetModal.doneToast': 'Zresetowano poziom do {target} dla {n} {noun}',
 
     'learn.title': 'Ucz się',
     'learn.deckInfo': 'Talia «{name}» · do powtórki: {due}',
@@ -651,8 +686,8 @@ const TRANSLATIONS = {
     'learn.tapToFlipBack': 'stuknij ponownie, aby znów zobaczyć słowo',
     'learn.stampNo': 'NIE ZNAŁEM',
     'learn.stampYes': 'ZNAŁEM',
-    'learn.sessionComplete': 'Sesja powtórki zakończona!\nNauczono fiszek: {n} 👏',
-    'learn.sessionCompleteOf': 'Sesja powtórki zakończona!\nNauczono fiszek: {n} z {total} 👏',
+    'learn.sessionComplete': 'Sesja powtórki zakończona!\nNauczono: {n} {noun} 👏',
+    'learn.sessionCompleteOf': 'Sesja powtórki zakończona!\nNauczono: {n} z {total} {noun} 👏',
     'learn.answerKnowToast': '✓ Znałem',
     'learn.answerDontKnowToast': '✗ Zobaczysz to jeszcze raz w tej sesji',
     'learn.repeatAgainBtn': 'Powtórz jeszcze raz',
@@ -663,14 +698,15 @@ const TRANSLATIONS = {
 
     'listen.title': 'Słuchaj',
     'listen.hint': 'Aplikacja przeczyta na głos wszystkie fiszki talii po kolei — słowo, potem tłumaczenie.',
-    'listen.deckInfo': 'Talia «{name}» · fiszek: {count}',
+    'listen.deckInfo': 'Talia «{name}» · {countPhrase}',
     'listen.shuffleLabel': 'Losowa kolejność',
     'listen.repeatLabel': 'Powtarzaj w kółko',
     'listen.startBtn': '▶ Rozpocznij',
     'listen.finishBtn': 'Zakończ',
     'listen.startAgainBtn': 'Słuchaj ponownie',
-    'listen.finishedText': 'Odsłuchano fiszek: {n} 🔊',
+    'listen.finishedText': 'Odsłuchano: {n} {noun} 🔊',
     'listen.notSupportedText': 'Ta przeglądarka nie obsługuje syntezy mowy (Web Speech API).\nW Safari na iPhonie powinno działać.',
+    'listen.noVoicesText': 'Synteza mowy jest niedostępna w tej przeglądarce — nie znaleziono żadnego głosu.\nSpróbuj innej przeglądarki albo zainstaluj głosy językowe w ustawieniach urządzenia.',
     'listen.noCardsText': 'W talii «{name}» nie ma jeszcze fiszek.\nDodaj je w zakładce „Fiszki”.',
     'listen.deleteConfirmText': '«{word}» → «{translation}» zostanie trwale usunięta z talii.',
     'listen.deletedToast': 'Fiszka usunięta',
@@ -680,6 +716,7 @@ const TRANSLATIONS = {
     'stats.deckName': 'Talia «{name}»',
     'stats.totalLabel': 'Wszystkich fiszek',
     'stats.dueLabel': 'Gotowych do powtórki',
+    'stats.dueRightNowHint': 'dostępnych właśnie teraz',
 
     'settings.title': 'Ustawienia',
     'settings.subtitle': 'Zachowanie aplikacji na tym urządzeniu',
@@ -690,6 +727,7 @@ const TRANSLATIONS = {
     'settings.deletePositionStamps': 'Na dole, pod przyciskami „Znałem” / „Nie znałem”',
     'settings.dailyGoalLabel': 'Dzienny cel (fiszek dziennie)',
     'settings.dailyGoalHint': 'Liczone są odpowiedzi ze wszystkich talii razem — na tej podstawie liczona jest passa dni.',
+    'settings.dailyGoalClampedToast': 'Dzienny cel ograniczony do: {value} {noun}',
     'settings.reminderLabel': 'Przypomnienie o powtórce',
     'settings.reminderEnable': 'Włącz przypomnienie',
     'settings.requestPermission': 'Zezwól na powiadomienia',
@@ -699,7 +737,7 @@ const TRANSLATIONS = {
     'notifications.denied': 'Powiadomienia są zablokowane w ustawieniach przeglądarki — włącz je tam, aby przypomnienie działało.',
     'notifications.default': 'Naciśnij „Zezwól na powiadomienia”, aby przypomnienie mogło się pojawiać.',
     'notifications.unsupported': 'Ta przeglądarka nie obsługuje powiadomień.',
-    'notifications.reminderFired': 'Czas powtórzyć {n} fiszek!',
+    'notifications.reminderFired': 'Czas powtórzyć {n} {noun}!',
 
     'learn.dailyGoalProgress': '{count} / {goal} dzisiaj',
     'learn.allDecksLabel': 'Ucz się fiszek ze wszystkich talii w tym języku',
@@ -707,11 +745,12 @@ const TRANSLATIONS = {
     'learn.tagFilterAll': 'Wszystkie tagi',
     'learn.noDeckLangMatch': 'Nie ma jeszcze innych talii z tą samą parą językową',
 
-    'decks.streakText': '🔥 Passa: {n} dni z rzędu',
+    'decks.streakText': '🔥 Passa: {n} {noun} z rzędu',
     'decks.streakNone': 'Zacznij passę — zrealizuj dzisiejszy cel',
     'decks.dailyGoalLabel': 'Dzisiaj: {count} / {goal}',
 
     'stats.forecastTitle': 'Prognoza powtórek',
+    'stats.forecastHint': 'Ile fiszek będzie do powtórki, według dat — „Dzisiaj” już zawiera to, co jest dostępne właśnie teraz.',
     'stats.forecastToday': 'Dzisiaj',
     'stats.forecastTomorrow': 'Jutro',
     'stats.forecastWeek': 'W tym tygodniu',
@@ -733,18 +772,21 @@ const TRANSLATIONS = {
     'exportModal.backupHint': 'Pełna kopia zapasowa zapisuje też postęp (poziomy, daty powtórek, tagi) — przydatne przy przenoszeniu na inne urządzenie bez utraty historii nauki.',
     'exportModal.backupBtn': '📦 Pełna kopia zapasowa (.kdeck.json)',
     'exportModal.shareLinkBtn': '🔗 Udostępnij link',
-    'export.backupDownloadedToast': 'Pobrano kopię zapasową: {n} fiszek z postępem',
+    'export.backupDownloadedToast': 'Pobrano kopię zapasową: {n} {noun} z postępem',
 
     'shareLink.title': 'Link do udostępnienia talii',
     'shareLink.hint': 'Link zawiera słowa, tłumaczenia i tagi (bez postępu powtórek) — wszystko jest zakodowane w adresie, nic nie jest nigdzie wysyłane.',
     'shareLink.copyBtn': 'Skopiuj link',
     'shareLink.copiedToast': 'Link skopiowany',
     'shareLink.tooLongToast': 'Ta talia jest za duża na link — użyj eksportu do pliku (.json/.csv) zamiast tego.',
+    'shareLink.largeDeckConfirmTitle': 'Duża talia — na pewno link?',
+    'shareLink.largeDeckConfirmText': 'Ta talia ma {count} {noun} — link wyjdzie długi i niewygodny do wysłania. Może wygodniej będzie użyć eksportu do pliku (.json/.csv)?',
+    'shareLink.largeDeckConfirmBtn': 'Mimo to utwórz link',
     'shareLink.unsupportedToast': 'Ta przeglądarka nie obsługuje kompresji dla linków — użyj eksportu do pliku.',
     'shareLink.importTitle': 'Zaimportować tę talię z linku?',
-    'shareLink.importSummary': '„{name}”: {count} fiszek ({wordLang} → {trLang})',
+    'shareLink.importSummary': '„{name}”: {count} {noun} ({wordLang} → {trLang})',
     'shareLink.importBtn': 'Importuj',
-    'shareLink.importedToast': 'Talia „{name}” zaimportowana ({count} fiszek)',
+    'shareLink.importedToast': 'Talia „{name}” zaimportowana ({count} {noun})',
     'shareLink.invalidToast': 'Nie udało się odczytać linku — może być uszkodzony lub nieaktualny.',
 
     'import.fullBackupAddedToast': 'Zaimportowano z postępem: {added}',
@@ -801,7 +843,79 @@ function t(key, vars) {
 }
 
 /** Проставляет переводы во все статические элементы разметки (вызывается при старте и при смене языка). */
+/* ---------------------------------------------------------------------- *
+ * Согласование числительных (1 карточка / 2 карточки / 5 карточек)
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Формы существительных для склонения по числу — по одному набору на каждый
+ * поддерживаемый язык. Добавляй сюда новое слово один раз, а не в каждом
+ * месте интерфейса по отдельности.
+ */
+const PLURAL_FORMS = {
+  ru: {
+    card: ['карточка', 'карточки', 'карточек'],
+    deck: ['колода', 'колоды', 'колод'],
+    day: ['день', 'дня', 'дней'],
+    group: ['группа', 'группы', 'групп'],
+    duplicate: ['дубль', 'дубля', 'дублей'],
+  },
+  en: {
+    card: ['card', 'cards', 'cards'],
+    deck: ['deck', 'decks', 'decks'],
+    day: ['day', 'days', 'days'],
+    group: ['group', 'groups', 'groups'],
+    duplicate: ['duplicate', 'duplicates', 'duplicates'],
+  },
+  pl: {
+    card: ['fiszka', 'fiszki', 'fiszek'],
+    deck: ['talia', 'talie', 'talii'],
+    day: ['dzień', 'dni', 'dni'],
+    group: ['grupa', 'grupy', 'grup'],
+    duplicate: ['duplikat', 'duplikaty', 'duplikatów'],
+  },
+};
+
+/** Русское правило: 1 → forms[0]; 2–4 → forms[1]; 0, 5–20, 11–14 и т.д. → forms[2]. */
+function pluralFormRu(n, forms) {
+  const n100 = Math.abs(n) % 100;
+  const n10 = n100 % 10;
+  if (n100 >= 11 && n100 <= 14) return forms[2];
+  if (n10 === 1) return forms[0];
+  if (n10 >= 2 && n10 <= 4) return forms[1];
+  return forms[2];
+}
+
+/** Польское правило: 1 → forms[0]; 2–4 (кроме 12–14) → forms[1]; иначе → forms[2]. */
+function pluralFormPl(n, forms) {
+  const abs = Math.abs(n);
+  if (abs === 1) return forms[0];
+  const n10 = abs % 10;
+  const n100 = abs % 100;
+  if (n10 >= 2 && n10 <= 4 && !(n100 >= 12 && n100 <= 14)) return forms[1];
+  return forms[2];
+}
+
+/**
+ * Возвращает ТОЛЬКО форму слова (без самого числа) под текущий язык
+ * приложения — например pluralWord(3, 'card') → "карточки" (ru) /
+ * "cards" (en) / "fiszki" (pl). Используется как {noun} в шаблонах t().
+ */
+function pluralWord(n, nounKey) {
+  const forms = (PLURAL_FORMS[_currentLang] || PLURAL_FORMS.ru)[nounKey];
+  if (!forms) return '';
+  if (_currentLang === 'pl') return pluralFormPl(n, forms);
+  if (_currentLang === 'en') return Math.abs(n) === 1 ? forms[0] : forms[1];
+  return pluralFormRu(n, forms);
+}
+
+/** Готовая строка "{n} <форма>" — например pluralize(5, 'card') → "5 карточек". */
+function pluralize(n, nounKey) {
+  return `${n} ${pluralWord(n, nounKey)}`;
+}
+
 function applyStaticTranslations() {
+
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.getAttribute('data-i18n'));
   });

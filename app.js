@@ -34,6 +34,8 @@ const state = {
   },
   reminderCheckTimer: null,
   pendingShareImport: null,       // данные колоды из #import=... в ссылке, ждущие подтверждения
+  cardsSearchQuery: '',           // текст поиска на вкладке "Карточки" (слово/перевод/тег)
+  cardsSearchDeckId: null,        // к какой колоде относится текущий поисковый запрос
 };
 
 /* ---------------------------------------------------------------------- *
@@ -173,7 +175,7 @@ async function renderDailyGoalUI() {
   const streakText = $('#streak-text');
   if (streakBadge && streakText) {
     if (streak.current > 0) {
-      streakText.textContent = t('decks.streakText', { n: streak.current });
+      streakText.textContent = t('decks.streakText', { n: streak.current, noun: pluralWord(streak.current, 'day') });
       streakBadge.hidden = false;
     } else {
       streakBadge.hidden = true;
@@ -210,7 +212,7 @@ async function renderDecks() {
     row.innerHTML = `
       <div class="deck-main">
         <div class="deck-name">${d.id === activeId ? '<span class="star">★</span>' : ''}${escapeHtml(d.name)}</div>
-        <div class="deck-count">${escapeHtml(t('decks.rowInfo', { count: d.cardCount, wordLang: wordLangLabel, trLang: trLangLabel }))}</div>
+        <div class="deck-count">${escapeHtml(t('decks.rowInfo', { count: d.cardCount, noun: pluralWord(d.cardCount, 'card'), wordLang: wordLangLabel, trLang: trLangLabel }))}</div>
       </div>
       <button class="deck-edit" data-id="${d.id}">✏️</button>
       <button class="deck-del" data-id="${d.id}" data-name="${escapeHtml(d.name)}">🗑</button>
@@ -229,7 +231,7 @@ async function renderDecks() {
       e.stopPropagation();
       askConfirm(
         t('decks.deleteConfirmTitle'),
-        t('decks.deleteConfirmText', { name: d.name, count: d.cardCount }),
+        t('decks.deleteConfirmText', { name: d.name, count: d.cardCount, noun: pluralWord(d.cardCount, 'card') }),
         t('common.delete'),
         async () => {
           stopActiveSessions();
@@ -295,6 +297,19 @@ $('#confirm-new-deck').addEventListener('click', async () => {
   const translationLang = $('#select-translation-lang').value;
   if (!name) { toast(t('deckModal.nameEmptyToast')); return; }
 
+  if (wordLang === translationLang) {
+    askConfirm(
+      t('deckModal.sameLangConfirmTitle'),
+      t('deckModal.sameLangConfirmText'),
+      t('deckModal.sameLangConfirmBtn'),
+      () => finishSaveDeck(name, wordLang, translationLang)
+    );
+    return;
+  }
+  await finishSaveDeck(name, wordLang, translationLang);
+});
+
+async function finishSaveDeck(name, wordLang, translationLang) {
   if (state.editingDeckId) {
     await updateDeck(state.editingDeckId, { name, wordLang, translationLang });
     closeModal();
@@ -308,7 +323,7 @@ $('#confirm-new-deck').addEventListener('click', async () => {
   }
   state.editingDeckId = null;
   renderDecks();
-});
+}
 
 /* --- Объединение колод ------------------------------------------------------ */
 
@@ -324,26 +339,46 @@ $('#btn-merge-decks').addEventListener('click', async () => {
   const decks = await getAllDecks();
   if (decks.length < 2) { toast(t('decks.needTwoDecksToast')); return; }
 
-  const fill = (selectEl, defaultIndex) => {
-    selectEl.innerHTML = decks.map((d, i) =>
-      `<option value="${d.id}"${i === defaultIndex ? ' selected' : ''}>${escapeHtml(deckOptionLabel(d))}</option>`
-    ).join('');
-  };
-  fill($('#select-merge-source'), 0);
-  fill($('#select-merge-target'), 1);
+  const sourceSelect = $('#select-merge-source');
+  sourceSelect.innerHTML = decks.map((d, i) =>
+    `<option value="${d.id}"${i === 0 ? ' selected' : ''}>${escapeHtml(deckOptionLabel(d))}</option>`
+  ).join('');
+
+  function refreshCompatibleTargets() {
+    const sourceId = Number(sourceSelect.value);
+    const source = decks.find((d) => d.id === sourceId);
+    const compatible = decks.filter((d) =>
+      d.id !== sourceId && d.wordLang === source.wordLang && d.translationLang === source.translationLang
+    );
+    const targetSelect = $('#select-merge-target');
+    if (compatible.length === 0) {
+      targetSelect.innerHTML = `<option value="" disabled selected>${escapeHtml(t('merge.noCompatibleOption'))}</option>`;
+    } else {
+      targetSelect.innerHTML = compatible.map((d, i) =>
+        `<option value="${d.id}"${i === 0 ? ' selected' : ''}>${escapeHtml(deckOptionLabel(d))}</option>`
+      ).join('');
+    }
+  }
+
+  sourceSelect.onchange = refreshCompatibleTargets;
+  refreshCompatibleTargets();
 
   openModal('modal-merge');
 });
 
 $('#confirm-merge-decks').addEventListener('click', async () => {
   const sourceId = Number($('#select-merge-source').value);
-  const targetId = Number($('#select-merge-target').value);
+  const targetValue = $('#select-merge-target').value;
+  if (!targetValue) { toast(t('merge.noCompatibleOption')); return; }
+  const targetId = Number(targetValue);
 
   if (sourceId === targetId) { toast(t('merge.sameDeckToast')); return; }
 
   const source = await getDeck(sourceId);
   const target = await getDeck(targetId);
 
+  // Список "...в колоду" уже отфильтрован по совместимости — эта проверка
+  // остаётся только как подстраховка на случай рассинхрона состояния формы.
   if (source.wordLang !== target.wordLang || source.translationLang !== target.translationLang) {
     toast(t('merge.diffLangToast'));
     return;
@@ -358,8 +393,8 @@ $('#confirm-merge-decks').addEventListener('click', async () => {
       stopActiveSessions();
       const { moved, skipped, mergedGroups } = await mergeDecks(sourceId, targetId);
       await ensureActiveDeck();
-      let msg = t('merge.doneToast', { moved }) + (skipped ? t('merge.doneSkippedSuffix', { skipped }) : '');
-      if (mergedGroups > 0) msg += ' ' + t('cards.mergeSimilarAutoToast', { groups: mergedGroups });
+      let msg = t('merge.doneToast', { moved }) + (skipped ? t('merge.doneSkippedSuffix', { skipped, noun: pluralWord(skipped, 'duplicate') }) : '');
+      if (mergedGroups > 0) msg += ' ' + t('cards.mergeSimilarAutoToast', { groupsPhrase: pluralize(mergedGroups, 'group') });
       toast(msg, { duration: 4500 });
       renderDecks();
     }
@@ -382,7 +417,7 @@ $('#btn-export-all-decks').addEventListener('click', async () => {
   }
   const backup = { schemaVersion: 1, decks: decksData, exportedAt: new Date().toISOString() };
   downloadFile('all-decks-backup.kdeck.json', JSON.stringify(backup, null, 2), 'application/json');
-  toast(t('export.allDecksDownloadedToast', { n: decks.length }), { duration: 3800 });
+  toast(t('export.allDecksDownloadedToast', { n: decks.length, noun: pluralWord(decks.length, 'deck') }), { duration: 3800 });
 });
 
 /* ---------------------------------------------------------------------- *
@@ -392,16 +427,41 @@ $('#btn-export-all-decks').addEventListener('click', async () => {
 async function renderCards() {
   const deckId = await ensureActiveDeck();
   const deck = await getDeck(deckId);
-  const cards = await getCardsByDeck(deckId);
+  const allCards = await getCardsByDeck(deckId);
+
+  // Поиск привязан к конкретной колоде — при переключении на другую колоду
+  // сбрасываем его, иначе запрос от прошлой колоды незаметно "утёк" бы в эту
+  if (state.cardsSearchDeckId !== deckId) {
+    state.cardsSearchDeckId = deckId;
+    state.cardsSearchQuery = '';
+    $('#cards-search-input').value = '';
+  }
 
   $('#cards-deck-name').textContent = deck.name;
-  $('#cards-count-sub').textContent = t('cards.countLabel', { count: cards.length });
+
+  const query = (state.cardsSearchQuery || '').trim().toLowerCase();
+  const cards = query
+    ? allCards.filter((c) =>
+        c.word.toLowerCase().includes(query) ||
+        c.translation.toLowerCase().includes(query) ||
+        (c.tags || []).some((tg) => tg.toLowerCase().includes(query))
+      )
+    : allCards;
+
+  $('#cards-count-sub').textContent = query
+    ? t('cards.searchResultsLabel', { matched: cards.length, total: allCards.length })
+    : t('cards.countLabel', { count: allCards.length, noun: pluralWord(allCards.length, 'card') });
+  $('#cards-search-clear').hidden = !query;
 
   const list = $('#entry-list');
   list.innerHTML = '';
 
-  if (cards.length === 0) {
+  if (allCards.length === 0) {
     list.innerHTML = `<div class="empty-hint">${t('cards.emptyHint')}</div>`;
+    return;
+  }
+  if (cards.length === 0) {
+    list.innerHTML = `<div class="empty-hint">${escapeHtml(t('cards.searchNoResults'))}</div>`;
     return;
   }
 
@@ -473,6 +533,19 @@ $('#confirm-edit-card').addEventListener('click', async () => {
 
 $('#btn-cards-overflow').addEventListener('click', () => openModal('modal-cards-overflow'));
 
+$('#cards-search-input').addEventListener('input', (e) => {
+  state.cardsSearchQuery = e.target.value;
+  renderCards();
+});
+
+$('#cards-search-clear').addEventListener('click', () => {
+  state.cardsSearchQuery = '';
+  $('#cards-search-input').value = '';
+  $('#cards-search-clear').hidden = true;
+  renderCards();
+  $('#cards-search-input').focus();
+});
+
 $('#btn-add-card').addEventListener('click', () => {
   $('#input-card-word').value = '';
   $('#input-card-translation').value = '';
@@ -497,7 +570,7 @@ $('#btn-dedup').addEventListener('click', async () => {
   closeModal();
   const deckId = await ensureActiveDeck();
   const removed = await dedupDeck(deckId);
-  toast(removed ? t('cards.dedupRemovedToast', { n: removed }) : t('cards.dedupNoneToast'), { duration: removed ? 3800 : 2200 });
+  toast(removed ? t('cards.dedupRemovedToast', { n: removed, noun: pluralWord(removed, 'duplicate') }) : t('cards.dedupNoneToast'), { duration: removed ? 3800 : 2200 });
   renderCards();
 });
 
@@ -517,7 +590,7 @@ $('#btn-merge-similar').addEventListener('click', () => {
         toast(t('cards.mergeSimilarNoneToast'));
         return;
       }
-      toast(t('cards.mergeSimilarDoneToast', { groups: mergedGroups, removed: removedCards }), {
+      toast(t('cards.mergeSimilarDoneToast', { groupsPhrase: pluralize(mergedGroups, 'group'), removed: removedCards, noun: pluralWord(removedCards, 'card') }), {
         duration: 6500,
         undoLabel: t('common.undo'),
         onUndo: async () => {
@@ -547,7 +620,7 @@ function confirmResetLevels(targetBox) {
     async () => {
       const deckId = await ensureActiveDeck();
       const n = await resetDeckLevels(deckId, targetBox);
-      toast(t('resetModal.doneToast', { target: targetBox, n }), { duration: 3800 });
+      toast(t('resetModal.doneToast', { target: targetBox, n, noun: pluralWord(n, 'card') }), { duration: 3800 });
       renderCards();
     }
   );
@@ -563,18 +636,18 @@ $('#btn-delete-all').addEventListener('click', async () => {
   if (total === 0) { toast(t('cards.noCardsToast')); return; }
   askConfirm(
     t('cards.clearConfirmTitle'),
-    t('cards.clearConfirmText', { count: total, name: deck.name }),
+    t('cards.clearConfirmText', { count: total, name: deck.name, noun: pluralWord(total, 'card') }),
     t('cards.clearBtn'),
     async () => {
       const cardsSnapshot = await getCardsByDeck(deckId);
       const n = await deleteAllCardsInDeck(deckId);
       renderCards();
-      toast(t('cards.clearedToast', { n }), {
+      toast(t('cards.clearedToast', { n, noun: pluralWord(n, 'card') }), {
         duration: 6500,
         undoLabel: t('common.undo'),
         onUndo: async () => {
           const { added } = await importFullBackupCards(deckId, cardsSnapshot);
-          toast(t('cards.restoredAllToast', { n: added }));
+          toast(t('cards.restoredAllToast', { n: added, noun: pluralWord(added, 'card') }));
           renderCards();
         },
       });
@@ -610,7 +683,7 @@ $('#import-file-input').addEventListener('change', async (e) => {
   if (allDecksData) {
     toast(t('import.allDecksDetected'), { duration: 3800 });
     const { decksCount, cardsAdded } = await importAllDecksBackup(allDecksData.decks);
-    toast(t('import.allDecksAddedToast', { decks: decksCount, cards: cardsAdded }), { duration: 3800 });
+    toast(t('import.allDecksAddedToast', { decks: decksCount, decksNoun: pluralWord(decksCount, 'deck'), cards: cardsAdded, cardsNoun: pluralWord(cardsAdded, 'card') }), { duration: 3800 });
     renderDecks();
     return;
   }
@@ -619,7 +692,7 @@ $('#import-file-input').addEventListener('change', async (e) => {
     toast(t('import.fullBackupDetected'), { duration: 3800 });
     const deckId = await ensureActiveDeck();
     const { added, skipped } = await importFullBackupCards(deckId, backupData.cards);
-    toast(t('import.fullBackupAddedToast', { added }) + (skipped ? t('import.skippedSuffix', { skipped }) : ''), { duration: 3800 });
+    toast(t('import.fullBackupAddedToast', { added }) + (skipped ? t('import.skippedSuffix', { skipped, noun: pluralWord(skipped, 'duplicate') }) : ''), { duration: 3800 });
     renderCards();
     return;
   }
@@ -644,8 +717,8 @@ $('#import-file-input').addEventListener('change', async (e) => {
   }
   const deckId = await ensureActiveDeck();
   const { added, skipped, mergedGroups } = await addCardsBulk(deckId, pairs);
-  let importMsg = t('import.addedToast', { added }) + (skipped ? t('import.skippedSuffix', { skipped }) : '');
-  if (mergedGroups > 0) importMsg += ' ' + t('cards.mergeSimilarAutoToast', { groups: mergedGroups });
+  let importMsg = t('import.addedToast', { added }) + (skipped ? t('import.skippedSuffix', { skipped, noun: pluralWord(skipped, 'duplicate') }) : '');
+  if (mergedGroups > 0) importMsg += ' ' + t('cards.mergeSimilarAutoToast', { groupsPhrase: pluralize(mergedGroups, 'group') });
   toast(importMsg, { duration: 4500 });
   renderCards();
 });
@@ -686,7 +759,7 @@ $('#export-as-json').addEventListener('click', async () => {
   const data = cards.map((c) => ({ word: c.word, translation: c.translation }));
   downloadFile(`${sanitizeFilename(deck.name)}.json`, JSON.stringify(data, null, 2), 'application/json');
   closeModal();
-  toast(t('export.downloadedToast', { n: cards.length }), { duration: 3800 });
+  toast(t('export.downloadedToast', { n: cards.length, noun: pluralWord(cards.length, 'card') }), { duration: 3800 });
 });
 
 $('#export-as-csv').addEventListener('click', async () => {
@@ -698,7 +771,7 @@ $('#export-as-csv').addEventListener('click', async () => {
   const csvContent = '\uFEFF' + lines.join('\r\n');
   downloadFile(`${sanitizeFilename(deck.name)}.csv`, csvContent, 'text/csv');
   closeModal();
-  toast(t('export.downloadedToast', { n: cards.length }), { duration: 3800 });
+  toast(t('export.downloadedToast', { n: cards.length, noun: pluralWord(cards.length, 'card') }), { duration: 3800 });
 });
 
 /* --- Полный бэкап (.kdeck.json) — с прогрессом (уровни, даты повторения, теги) ------- */
@@ -719,7 +792,7 @@ $('#export-full-backup').addEventListener('click', async () => {
   };
   downloadFile(`${sanitizeFilename(deck.name)}.kdeck.json`, JSON.stringify(backup, null, 2), 'application/json');
   closeModal();
-  toast(t('export.backupDownloadedToast', { n: cards.length }), { duration: 3800 });
+  toast(t('export.backupDownloadedToast', { n: cards.length, noun: pluralWord(cards.length, 'card') }), { duration: 3800 });
 });
 
 /* --- Шаринг колоды по ссылке (без бэкенда — данные прямо в URL) --------------------- */
@@ -764,6 +837,21 @@ $('#export-share-link').addEventListener('click', async () => {
   const deckId = await ensureActiveDeck();
   const deck = await getDeck(deckId);
   const cards = await getCardsByDeck(deckId);
+
+  const LARGE_DECK_THRESHOLD = 80;
+  if (cards.length > LARGE_DECK_THRESHOLD) {
+    askConfirm(
+      t('shareLink.largeDeckConfirmTitle'),
+      t('shareLink.largeDeckConfirmText', { count: cards.length, noun: pluralWord(cards.length, 'card') }),
+      t('shareLink.largeDeckConfirmBtn'),
+      () => generateShareLink(deck, cards)
+    );
+    return;
+  }
+  await generateShareLink(deck, cards);
+});
+
+async function generateShareLink(deck, cards) {
   // Без прогресса — только то, что нужно, чтобы получатель мог начать учить с нуля
   const payload = {
     schemaVersion: 1,
@@ -790,7 +878,7 @@ $('#export-share-link').addEventListener('click', async () => {
   closeModal();
   $('#share-link-output').value = url;
   openModal('modal-share-link');
-});
+}
 
 $('#share-link-copy').addEventListener('click', async () => {
   const url = $('#share-link-output').value;
@@ -832,7 +920,7 @@ async function checkForShareImportInUrl() {
   const wordLangLabel = t('lang.' + payload.wordLang) || payload.wordLang;
   const trLangLabel = t('lang.' + payload.translationLang) || payload.translationLang;
   $('#import-link-summary').textContent = t('shareLink.importSummary', {
-    name: payload.name || '—', count: payload.cards.length, wordLang: wordLangLabel, trLang: trLangLabel,
+    name: payload.name || '—', count: payload.cards.length, noun: pluralWord(payload.cards.length, 'card'), wordLang: wordLangLabel, trLang: trLangLabel,
   });
   openModal('modal-import-link');
 }
@@ -852,7 +940,7 @@ $('#import-link-confirm').addEventListener('click', async () => {
   stopActiveSessions();
   await setActiveDeck(deckId);
   state.pendingShareImport = null;
-  toast(t('shareLink.importedToast', { name, count: added }), { duration: 3800 });
+  toast(t('shareLink.importedToast', { name, count: added, noun: pluralWord(added, 'card') }), { duration: 3800 });
   renderDecks();
 });
 
@@ -1059,8 +1147,8 @@ async function showNextCard() {
     state.learn.sessionActive = false;
     $('#learn-session').hidden = true;
     $('#learn-empty-text').textContent = state.learn.dueAtStart > 20
-      ? t('learn.sessionCompleteOf', { n: state.learn.sessionTotal, total: state.learn.dueAtStart })
-      : t('learn.sessionComplete', { n: state.learn.sessionTotal });
+      ? t('learn.sessionCompleteOf', { n: state.learn.sessionTotal, total: state.learn.dueAtStart, noun: pluralWord(state.learn.sessionTotal, 'card') })
+      : t('learn.sessionComplete', { n: state.learn.sessionTotal, noun: pluralWord(state.learn.sessionTotal, 'card') });
     $('#btn-learn-again').hidden = false;
     $('#learn-empty').hidden = false;
     return;
@@ -1143,10 +1231,12 @@ $('#flip-card').addEventListener('keydown', (e) => {
   }
 });
 
-$('#card-speak-btn').addEventListener('click', (e) => {
+$('#card-speak-btn').addEventListener('click', async (e) => {
   e.stopPropagation();
   const cur = state.learn.current;
   if (!cur || !SPEECH_SUPPORTED) return;
+  const voices = await getVoicesAsync();
+  if (voices.length === 0) { toast(t('listen.noVoicesText'), { duration: 3800 }); return; }
   const text = state.learn.revealed ? cur.back : cur.front;
   const lang = state.learn.revealed ? cur.backLang : cur.frontLang;
   speakOnce(text, lang);
@@ -1181,7 +1271,7 @@ async function answerCurrent(correct) {
   // перекроет первый) — приоритет отдаём редкому и приятному поздравлению
   // со стриком, обычный тост ответа в этом случае просто пропускаем.
   if (streakInfo && streakInfo.justCompleted) {
-    toast(t('decks.streakText', { n: streakInfo.streak.current }), { duration: 3800 });
+    toast(t('decks.streakText', { n: streakInfo.streak.current, noun: pluralWord(streakInfo.streak.current, 'day') }), { duration: 3800 });
   } else {
     toast(correct ? t('learn.answerKnowToast') : t('learn.answerDontKnowToast'));
   }
@@ -1261,6 +1351,30 @@ $('#card-edit-btn-bottom').addEventListener('click', openEditFromLearn);
 
 const SPEECH_SUPPORTED = typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined';
 
+/**
+ * Список голосов синтеза речи иногда подгружается асинхронно (особенно в
+ * Chrome) — сразу после загрузки страницы getVoices() может вернуть пустой
+ * массив, даже если голоса на самом деле есть. Ждём событие voiceschanged
+ * с коротким таймаутом на случай, если голосов и правда нет вообще.
+ */
+function getVoicesAsync(timeoutMs = 1200) {
+  return new Promise((resolve) => {
+    if (!SPEECH_SUPPORTED) { resolve([]); return; }
+    const existing = speechSynthesis.getVoices();
+    if (existing.length > 0) { resolve(existing); return; }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      speechSynthesis.removeEventListener('voiceschanged', onChange);
+      resolve(speechSynthesis.getVoices());
+    };
+    const onChange = () => finish();
+    speechSynthesis.addEventListener('voiceschanged', onChange);
+    setTimeout(finish, timeoutMs);
+  });
+}
+
 /** Разово озвучивает один кусок текста (используется кнопкой 🔊 на карточке в «Учить»). */
 function speakOnce(text, lang) {
   if (!SPEECH_SUPPORTED || !text) return;
@@ -1281,11 +1395,20 @@ async function renderListenSetup() {
   $('#listen-session').hidden = true;
   $('#listen-empty').hidden = true;
   $('#listen-setup').hidden = false;
-  $('#listen-deck-info').textContent = t('listen.deckInfo', { name: deck.name, count: cards.length });
+  $('#listen-deck-info').textContent = t('listen.deckInfo', { name: deck.name, countPhrase: pluralize(cards.length, 'card') });
 
   if (!SPEECH_SUPPORTED) {
     $('#listen-setup').hidden = true;
     $('#listen-empty-text').textContent = t('listen.notSupportedText');
+    $('#btn-listen-again').hidden = true;
+    $('#listen-empty').hidden = false;
+    return;
+  }
+
+  const voices = await getVoicesAsync();
+  if (voices.length === 0) {
+    $('#listen-setup').hidden = true;
+    $('#listen-empty-text').textContent = t('listen.noVoicesText');
     $('#btn-listen-again').hidden = true;
     $('#listen-empty').hidden = false;
     return;
@@ -1317,7 +1440,7 @@ $('#btn-start-listen').addEventListener('click', async () => {
   speaker.onFinished = () => {
     state.listen.sessionActive = false;
     $('#listen-session').hidden = true;
-    $('#listen-empty-text').textContent = t('listen.finishedText', { n: speaker.total });
+    $('#listen-empty-text').textContent = t('listen.finishedText', { n: speaker.total, noun: pluralWord(speaker.total, 'card') });
     $('#btn-listen-again').hidden = false;
     $('#listen-empty').hidden = false;
   };
@@ -1467,11 +1590,15 @@ async function renderStats() {
   $('#stats-deck-name').textContent = t('stats.deckName', { name: deck.name });
   $('#stat-grid').innerHTML = `
     <div class="stat-row"><span class="stat-label">${escapeHtml(t('stats.totalLabel'))}</span><span class="stat-value">${total}</span></div>
-    <div class="stat-row"><span class="stat-label">${escapeHtml(t('stats.dueLabel'))}</span><span class="stat-value">${due}</span></div>
+    <div class="stat-row">
+      <span class="stat-label">${escapeHtml(t('stats.dueLabel'))}<br><span class="stat-sublabel">${escapeHtml(t('stats.dueRightNowHint'))}</span></span>
+      <span class="stat-value">${due}</span>
+    </div>
   `;
 
   // --- Прогноз ---
   const forecast = await getForecastBuckets(deckId);
+  $('#forecast-hint').textContent = t('stats.forecastHint');
   const forecastItems = [
     ['stats.forecastToday', forecast.today],
     ['stats.forecastTomorrow', forecast.tomorrow],
@@ -1604,10 +1731,14 @@ function renderNotificationStatusHint() {
 }
 
 $('#setting-daily-goal').addEventListener('change', async (e) => {
-  const val = Math.max(1, Math.min(500, parseInt(e.target.value, 10) || 20));
+  const raw = parseInt(e.target.value, 10);
+  const val = Math.max(1, Math.min(500, Number.isFinite(raw) ? raw : 20));
   state.settings.dailyGoal = val;
   e.target.value = val;
   await setSetting('dailyGoal', val);
+  if (Number.isFinite(raw) && raw !== val) {
+    toast(t('settings.dailyGoalClampedToast', { value: val, noun: pluralWord(val, 'card') }), { duration: 3800 });
+  }
   renderDailyGoalUI();
 });
 
@@ -1663,7 +1794,7 @@ async function checkReminderDue() {
 
   await setSetting('reminderLastFiredDay', todayKey);
   const title = t('app.title');
-  const body = t('notifications.reminderFired', { n: due });
+  const body = t('notifications.reminderFired', { n: due, noun: pluralWord(due, 'card') });
   try {
     if ('serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.ready;

@@ -76,6 +76,11 @@
       <button class="btn-ghost btn-overflow" id="btn-cards-overflow" data-i18n-aria="cards.moreActionsTitle" aria-label="Ещё действия">⋯</button>
     </div>
 
+    <div class="cards-search-row">
+      <input type="text" id="cards-search-input" class="cards-search-input" data-i18n-placeholder="cards.searchPlaceholder" placeholder="Поиск по слову, переводу или тегу">
+      <button class="cards-search-clear" id="cards-search-clear" aria-label="Очистить поиск" hidden>✕</button>
+    </div>
+
     <div class="entry-list" id="entry-list"></div>
     <input type="file" id="import-file-input" accept=".csv,.json" hidden>
   </section>
@@ -211,6 +216,7 @@
 
     <div class="stat-block">
       <p class="stat-block-title" data-i18n="stats.forecastTitle">Прогноз повторений</p>
+      <p class="stat-block-hint" id="forecast-hint"></p>
       <div class="forecast-row" id="forecast-row"></div>
     </div>
 
