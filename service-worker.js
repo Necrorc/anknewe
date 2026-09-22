@@ -5,7 +5,7 @@
  * хранятся отдельно, в IndexedDB — сервис-воркер их не касается.
  */
 
-const CACHE_NAME = 'flashcards-pwa-v22';
+const CACHE_NAME = 'flashcards-pwa-v23';
 
 const ASSETS = [
   './',

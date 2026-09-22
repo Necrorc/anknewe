@@ -75,7 +75,8 @@ async function runSm2Tests() {
   try {
     await import('fake-indexeddb/auto');
     const names = ['ensureActiveDeck', 'createDeck', 'getDeck', 'addCard', 'getCardsByDeck', 'getCard',
-      'updateCardProgress', 'mergeSimilarCards', 'addCardsBulk', 'mergeDecks', 'tx', 'now'];
+      'updateCardProgress', 'mergeSimilarCards', 'addCardsBulk', 'mergeDecks', 'tx', 'now',
+      'moveCardsToDeck', 'deleteCard', 'restoreCard'];
     const db = new Function(dbCode + `; return { ${names.join(', ')} };`)();
 
     await test('updateCardProgress (через БД) использует ту же логику, что и computeSm2Update', async () => {
@@ -159,6 +160,59 @@ async function runSm2Tests() {
       assert.equal(result.mergedGroups, 1);
       assert.equal(cards.length, 1);
       assert.equal(cards[0].translation, '1. берег\n2. банк');
+    });
+
+    await test('moveCardsToDeck переносит карточки с сохранением прогресса и тегов', async () => {
+      const source = await db.createDeck('move-test-source-1');
+      const target = await db.createDeck('move-test-target-1');
+      await db.addCard(source, 'hello', 'привет', ['greeting']);
+      const [card] = await db.getCardsByDeck(source);
+      await db.updateCardProgress(card.id, true);
+      await db.updateCardProgress(card.id, true); // box=2
+
+      const result = await db.moveCardsToDeck([card.id], target);
+      const sourceCards = await db.getCardsByDeck(source);
+      const targetCards = await db.getCardsByDeck(target);
+
+      assert.equal(result.moved, 1);
+      assert.equal(sourceCards.length, 0);
+      assert.equal(targetCards.length, 1);
+      assert.equal(targetCards[0].box, 2);
+      assert.deepEqual(targetCards[0].tags, ['greeting']);
+    });
+
+    await test('moveCardsToDeck пропускает карточки, дублирующие уже существующие в целевой колоде', async () => {
+      const source = await db.createDeck('move-test-source-2');
+      const target = await db.createDeck('move-test-target-2');
+      await db.addCard(source, 'dup', 'дубль');
+      await db.addCard(target, 'dup', 'дубль'); // уже есть в целевой
+
+      const [card] = await db.getCardsByDeck(source);
+      const result = await db.moveCardsToDeck([card.id], target);
+
+      assert.equal(result.moved, 0);
+      assert.equal(result.skipped, 1);
+      const sourceCards = await db.getCardsByDeck(source);
+      assert.equal(sourceCards.length, 1); // осталась на месте, не удалена
+    });
+
+    await test('moveCardsToDeck: отмена (delete newIds + restoreCard) полностью восстанавливает исходное состояние', async () => {
+      const source = await db.createDeck('move-test-source-3');
+      const target = await db.createDeck('move-test-target-3');
+      await db.addCard(source, 'word1', 'слово1');
+      const [card] = await db.getCardsByDeck(source);
+      await db.updateCardProgress(card.id, true);
+
+      const result = await db.moveCardsToDeck([card.id], target);
+      // отмена
+      for (const id of result.newIds) await db.deleteCard(id);
+      for (const c of result.movedCards) await db.restoreCard(c);
+
+      const sourceCards = await db.getCardsByDeck(source);
+      const targetCards = await db.getCardsByDeck(target);
+      assert.equal(sourceCards.length, 1);
+      assert.equal(sourceCards[0].box, 1);
+      assert.equal(targetCards.length, 0);
     });
   } catch (err) {
     console.log('  ⚠️  Пропущены тесты БД — fake-indexeddb не установлен в tests/ (npm install fake-indexeddb --no-save)');

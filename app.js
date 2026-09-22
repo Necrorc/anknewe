@@ -36,6 +36,8 @@ const state = {
   pendingShareImport: null,       // данные колоды из #import=... в ссылке, ждущие подтверждения
   cardsSearchQuery: '',           // текст поиска на вкладке "Карточки" (слово/перевод/тег)
   cardsSearchDeckId: null,        // к какой колоде относится текущий поисковый запрос
+  selectedCardIds: new Set(),     // id отмеченных чекбоксом карточек на вкладке "Карточки"
+  pendingCardMove: null,          // { cardIds } — выбранные карточки, ждущие переноса в новую колоду
 };
 
 /* ---------------------------------------------------------------------- *
@@ -115,6 +117,7 @@ function closeModal() {
   $('#modal-backdrop').hidden = true;
   state.pendingConfirm = null;
   state.editingDeckId = null;
+  state.pendingCardMove = null;
   // возвращаем фокус туда, откуда открыли модалку — важно для клавиатурной навигации
   if (lastFocusedBeforeModal && document.body.contains(lastFocusedBeforeModal)) {
     lastFocusedBeforeModal.focus();
@@ -297,31 +300,47 @@ $('#confirm-new-deck').addEventListener('click', async () => {
   const translationLang = $('#select-translation-lang').value;
   if (!name) { toast(t('deckModal.nameEmptyToast')); return; }
 
+  // Захватываем СРАЗУ, а не читаем из state.pendingCardMove позже — к тому
+  // моменту closeModal() (в т.ч. вызванный внутри askConfirm ниже) его уже
+  // сбросит. Передаём явным параметром через всю цепочку вместо этого.
+  const pendingMove = state.pendingCardMove;
+
   if (wordLang === translationLang) {
     askConfirm(
       t('deckModal.sameLangConfirmTitle'),
       t('deckModal.sameLangConfirmText'),
       t('deckModal.sameLangConfirmBtn'),
-      () => finishSaveDeck(name, wordLang, translationLang)
+      () => finishSaveDeck(name, wordLang, translationLang, pendingMove)
     );
     return;
   }
-  await finishSaveDeck(name, wordLang, translationLang);
+  await finishSaveDeck(name, wordLang, translationLang, pendingMove);
 });
 
-async function finishSaveDeck(name, wordLang, translationLang) {
+async function finishSaveDeck(name, wordLang, translationLang, pendingMove) {
   if (state.editingDeckId) {
     await updateDeck(state.editingDeckId, { name, wordLang, translationLang });
     closeModal();
     toast(t('deckModal.updatedToast', { name }));
-  } else {
-    const id = await createDeck(name, { wordLang, translationLang });
-    stopActiveSessions();
-    await setActiveDeck(id);
-    closeModal();
-    toast(t('deckModal.createdToast', { name }));
+    state.editingDeckId = null;
+    renderDecks();
+    return;
   }
-  state.editingDeckId = null;
+
+  const id = await createDeck(name, { wordLang, translationLang });
+  closeModal();
+
+  // Колода создавалась специально для переноса выбранных карточек — не
+  // делаем её активной и не показываем обычный тост "колода создана",
+  // а сразу довершаем перенос (со своим тостом и отменой).
+  if (pendingMove) {
+    await performCardMove(pendingMove.cardIds, id, name);
+    return;
+  }
+
+  stopActiveSessions();
+  await setActiveDeck(id);
+  toast(t('deckModal.createdToast', { name }));
   renderDecks();
 }
 
@@ -429,12 +448,13 @@ async function renderCards() {
   const deck = await getDeck(deckId);
   const allCards = await getCardsByDeck(deckId);
 
-  // Поиск привязан к конкретной колоде — при переключении на другую колоду
-  // сбрасываем его, иначе запрос от прошлой колоды незаметно "утёк" бы в эту
+  // Поиск и выбор карточек привязаны к конкретной колоде — при переключении
+  // на другую колоду сбрасываем оба, иначе они незаметно "утекли" бы в неё
   if (state.cardsSearchDeckId !== deckId) {
     state.cardsSearchDeckId = deckId;
     state.cardsSearchQuery = '';
     $('#cards-search-input').value = '';
+    state.selectedCardIds = new Set();
   }
 
   $('#cards-deck-name').textContent = deck.name;
@@ -452,6 +472,11 @@ async function renderCards() {
     ? t('cards.searchResultsLabel', { matched: cards.length, total: allCards.length })
     : t('cards.countLabel', { count: allCards.length, noun: pluralWord(allCards.length, 'card') });
   $('#cards-search-clear').hidden = !query;
+
+  // Выбор мог ссылаться на карточки, которых больше нет (удалены/перенесены) — подчищаем
+  const allCardIds = new Set(allCards.map((c) => c.id));
+  for (const id of state.selectedCardIds) if (!allCardIds.has(id)) state.selectedCardIds.delete(id);
+  updateSelectionBar();
 
   const list = $('#entry-list');
   list.innerHTML = '';
@@ -472,7 +497,9 @@ async function renderCards() {
     const tagsHtml = tags.length
       ? `<div class="entry-tags">${tags.map((tg) => `<span class="tag-chip">${escapeHtml(tg)}</span>`).join('')}</div>`
       : '';
+    const checked = state.selectedCardIds.has(c.id) ? 'checked' : '';
     row.innerHTML = `
+      <input type="checkbox" class="entry-checkbox" data-id="${c.id}" ${checked} aria-label="${escapeHtml(t('cards.selectCardAria'))}">
       <span class="entry-num">${i + 1}</span>
       <span class="entry-word">${escapeHtml(c.word)}</span>
       <span class="entry-arrow">→</span>
@@ -482,6 +509,11 @@ async function renderCards() {
       <button class="entry-del" data-id="${c.id}">✕</button>
       ${tagsHtml}
     `;
+    row.querySelector('.entry-checkbox').addEventListener('change', (e) => {
+      if (e.target.checked) state.selectedCardIds.add(c.id);
+      else state.selectedCardIds.delete(c.id);
+      updateSelectionBar();
+    });
     row.querySelector('.entry-edit').addEventListener('click', () => openEditCardModal(c));
     row.querySelector('.entry-del').addEventListener('click', () => {
       askConfirm(t('cards.deleteConfirmTitle'), `«${c.word}» → «${c.translation}»`, t('common.delete'), async () => {
@@ -545,6 +577,86 @@ $('#cards-search-clear').addEventListener('click', () => {
   renderCards();
   $('#cards-search-input').focus();
 });
+
+/* --- Выбор карточек чекбоксами и перенос в другую колоду -------------------- */
+
+function updateSelectionBar() {
+  const n = state.selectedCardIds.size;
+  const bar = $('#cards-selection-bar');
+  bar.hidden = n === 0;
+  if (n > 0) {
+    $('#cards-selection-count').textContent = t('cards.selectedCountLabel', { n, noun: pluralWord(n, 'card') });
+  }
+}
+
+$('#btn-clear-selection').addEventListener('click', () => {
+  state.selectedCardIds.clear();
+  renderCards();
+});
+
+$('#btn-move-selected').addEventListener('click', async () => {
+  if (state.selectedCardIds.size === 0) return;
+  const deckId = await ensureActiveDeck();
+  const decks = await getAllDecks();
+  const otherDecks = decks.filter((d) => d.id !== deckId);
+
+  $('#move-cards-title').textContent = t('cards.moveModalTitle', { n: state.selectedCardIds.size, noun: pluralWord(state.selectedCardIds.size, 'card') });
+
+  const select = $('#select-move-target');
+  if (otherDecks.length === 0) {
+    select.innerHTML = `<option value="" disabled selected>${escapeHtml(t('cards.moveNoOtherDecks'))}</option>`;
+  } else {
+    select.innerHTML = otherDecks.map((d, i) =>
+      `<option value="${d.id}"${i === 0 ? ' selected' : ''}>${escapeHtml(deckOptionLabel(d))}</option>`
+    ).join('');
+  }
+
+  openModal('modal-move-cards');
+});
+
+$('#btn-move-to-new-deck').addEventListener('click', () => {
+  const cardIds = [...state.selectedCardIds];
+  closeModal(); // сбросит любой старый pendingCardMove — затем сразу выставляем актуальный
+  state.pendingCardMove = { cardIds };
+  openDeckModal(null);
+});
+
+$('#confirm-move-cards').addEventListener('click', async () => {
+  const targetValue = $('#select-move-target').value;
+  if (!targetValue) { toast(t('cards.moveNoOtherDecks')); return; }
+  const targetId = Number(targetValue);
+  const targetDeck = await getDeck(targetId);
+  const cardIds = [...state.selectedCardIds];
+  closeModal();
+  await performCardMove(cardIds, targetId, targetDeck.name);
+});
+
+/** Переносит карточки в целевую колоду (существующую или только что созданную),
+ * показывает тост с результатом и возможностью отмены, обновляет список. */
+async function performCardMove(cardIds, targetDeckId, targetDeckName) {
+  const result = await moveCardsToDeck(cardIds, targetDeckId);
+  state.selectedCardIds.clear();
+  renderCards();
+
+  if (result.moved === 0) {
+    toast(t('cards.moveNoneMovedToast'));
+    return;
+  }
+
+  let msg = t('cards.moveDoneToast', { count: result.moved, noun: pluralWord(result.moved, 'card'), name: targetDeckName });
+  if (result.skipped > 0) msg += ' ' + t('cards.moveSkippedSuffix', { skipped: result.skipped, noun: pluralWord(result.skipped, 'duplicate') });
+
+  toast(msg, {
+    duration: 6500,
+    undoLabel: t('common.undo'),
+    onUndo: async () => {
+      for (const id of result.newIds) await deleteCard(id);
+      for (const c of result.movedCards) await restoreCard(c);
+      toast(t('cards.moveUndoneToast'));
+      renderCards();
+    },
+  });
+}
 
 $('#btn-add-card').addEventListener('click', () => {
   $('#input-card-word').value = '';

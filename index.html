@@ -81,6 +81,14 @@
       <button class="cards-search-clear" id="cards-search-clear" aria-label="Очистить поиск" hidden>✕</button>
     </div>
 
+    <div class="cards-selection-bar" id="cards-selection-bar" hidden>
+      <span class="cards-selection-count" id="cards-selection-count"></span>
+      <div class="cards-selection-actions">
+        <button class="btn-ghost" id="btn-clear-selection" data-i18n="cards.clearSelectionBtn">Отмена</button>
+        <button class="btn-brass" id="btn-move-selected" data-i18n="cards.moveSelectedBtn">Перенести</button>
+      </div>
+    </div>
+
     <div class="entry-list" id="entry-list"></div>
     <input type="file" id="import-file-input" accept=".csv,.json" hidden>
   </section>
@@ -379,6 +387,18 @@
     <button class="overflow-item overflow-item--danger" id="btn-delete-all" data-i18n="cards.clearDeck">Очистить колоду</button>
     <div class="modal-actions">
       <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-move-cards" role="dialog" aria-modal="true" aria-labelledby="move-cards-title" tabindex="-1" hidden>
+    <h2 id="move-cards-title"></h2>
+    <p class="modal-hint" data-i18n="cards.moveModalHint">Прогресс (уровень, дата повторения) и теги перенесённых карточек сохранятся. Карточки, которые совпали бы со словом+переводом уже в целевой колоде, останутся на месте.</p>
+    <label class="select-label" data-i18n="cards.moveTargetLabel">В колоду</label>
+    <select id="select-move-target" class="modal-select"></select>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close data-i18n="common.cancel">Отмена</button>
+      <button class="btn-ghost" id="btn-move-to-new-deck" data-i18n="cards.moveToNewDeckBtn">+ Новая колода</button>
+      <button class="btn-brass" id="confirm-move-cards" data-i18n="cards.moveConfirmBtn">Перенести</button>
     </div>
   </div>
 

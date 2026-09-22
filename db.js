@@ -295,6 +295,60 @@ async function restoreCard(cardData) {
 }
 
 /**
+ * Переносит указанные карточки (по id) в другую колоду — с сохранением
+ * прогресса (уровень, дата следующего повторения) и тегов. Карточки, которые
+ * дублировали бы уже существующую в целевой колоде пару слово+перевод,
+ * пропускаются (остаются на месте, не удаляются).
+ *
+ * Возвращает { moved, skipped, movedCards, newIds } — movedCards (полные
+ * исходные записи) и newIds (id новых копий в целевой колоде) нужны вызывающей
+ * стороне, чтобы при необходимости отменить перенос (удалить копии, вернуть
+ * оригиналы через restoreCard).
+ */
+async function moveCardsToDeck(cardIds, targetDeckId) {
+  const cardsToMove = [];
+  for (const id of cardIds) {
+    const c = await getCard(id);
+    if (c) cardsToMove.push(c);
+  }
+  if (cardsToMove.length === 0) return { moved: 0, skipped: 0, movedCards: [], newIds: [] };
+
+  const existingTargetCards = await getCardsByDeck(targetDeckId);
+  const existingKeys = new Set(existingTargetCards.map((c) => c.word + '\u0001' + c.translation));
+
+  const moved = [];
+  let skipped = 0;
+  for (const c of cardsToMove) {
+    const key = c.word + '\u0001' + c.translation;
+    if (existingKeys.has(key)) { skipped++; continue; }
+    existingKeys.add(key);
+    moved.push(c);
+  }
+
+  const newIds = [];
+  if (moved.length) {
+    const t = await tx('cards', 'readwrite');
+    const store = t.objectStore('cards');
+    for (const c of moved) {
+      const req = store.add({
+        deckId: targetDeckId,
+        word: c.word,
+        translation: c.translation,
+        box: c.box,
+        nextReview: c.nextReview,
+        tags: c.tags || [],
+        createdAt: c.createdAt || now(),
+      });
+      req.onsuccess = () => newIds.push(req.result);
+    }
+    for (const c of moved) store.delete(c.id);
+    await new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+  }
+
+  return { moved: moved.length, skipped, movedCards: moved, newIds };
+}
+
+/**
  * Меняет слово/перевод (и опционально теги) существующей карточки. Если в той
  * же колоде уже есть другая карточка с такой же парой слово+перевод — правка
  * отклоняется как дубль. Возвращает true при успехе, false если это создало
